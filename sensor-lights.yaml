@@ -1,0 +1,384 @@
+blueprint:
+  name: Advanced Sensor Lights with Switch Override
+  description: >
+    A comprehensive motion light controller that handles Day/Night scenes, 
+    Lux sensors, and manual switch overrides.
+    
+    Logic Features:
+    - distinct Day and Night scenes based on time.
+    - distinct timeouts for Day and Night.
+    - Manual "Switch Off" pauses the sensor (lights stay off even if you move).
+    - Manual "Switch On" activates the lights and auto-off timer (if room is empty).
+    
+    REQUIRED HELPERS:
+    You must create a Timer and two Input Booleans (Active & Paused) for this blueprint to function.
+  domain: automation
+  input:
+    motion_sensor:
+      name: Motion Sensor
+      description: The binary sensor detecting occupancy.
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: occupancy
+    
+    switch_entity:
+      name: Physical Switch
+      description: The physical switch or entity used for manual control.
+      selector:
+        entity:
+          domain: 
+            - switch
+            - light
+
+    helper_timer:
+      name: Timer Helper (Required)
+      description: Create a timer entity (e.g. timer.kitchen_timeout).
+      selector:
+        entity:
+          domain: timer
+
+    helper_active:
+      name: Active Status Helper (Required)
+      description: Boolean to track if automation is active (e.g. input_boolean.kitchen_active).
+      selector:
+        entity:
+          domain: input_boolean
+
+    helper_paused:
+      name: Manual Pause Helper (Required)
+      description: Boolean to track manual override (e.g. input_boolean.kitchen_paused).
+      selector:
+        entity:
+          domain: input_boolean
+
+    day_scene:
+      name: Day Scene (or Script)
+      description: The scene or script to turn on during the day.
+      selector:
+        entity:
+          domain: 
+            - scene
+            - script
+
+    night_scene:
+      name: Night Scene (or Script)
+      description: The scene or script to turn on during the night.
+      selector:
+        entity:
+          domain: 
+            - scene
+            - script
+
+    off_scene:
+      name: Off Scene (or Script)
+      description: The scene or script to run to turn lights OFF.
+      selector:
+        entity:
+          domain: 
+            - scene
+            - script
+
+    time_day_start:
+      name: Day Start Time
+      description: Time when "Day Scene" becomes active.
+      default: "08:00:00"
+      selector:
+        time:
+
+    time_night_start:
+      name: Night Start Time
+      description: Time when "Night Scene" becomes active.
+      default: "22:00:00"
+      selector:
+        time:
+
+    delay_day:
+      name: Day Timeout (Minutes)
+      description: How long to wait after motion clears during the day.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 120
+          unit_of_measurement: minutes
+
+    delay_night:
+      name: Night Timeout (Minutes)
+      description: How long to wait after motion clears during the night.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 120
+          unit_of_measurement: minutes
+
+    illuminance_sensor:
+      name: Illuminance Sensor (Optional)
+      description: If provided, lights will only turn on if lux is below threshold.
+      default: []
+      selector:
+        entity:
+          domain: sensor
+          device_class: illuminance
+
+    illuminance_threshold:
+      name: Illuminance Threshold
+      description: Lights turn on below this Lux level.
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: lx
+
+    status_led:
+      name: Status LED (Optional)
+      description: An LED on the sensor to turn on/off with the lights (from original automation).
+      default: []
+      selector:
+        entity:
+          domain: light
+
+mode: single
+
+trigger:
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "on"
+    id: Occupancy
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "off"
+    id: Occupancy Cleared
+  - platform: state
+    entity_id: !input switch_entity
+    to: "on"
+    id: Light Switch On
+  - platform: state
+    entity_id: !input switch_entity
+    to: "off"
+    id: Light Switch Off
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "off"
+    for:
+      minutes: 15
+    id: Occupancy Cleared 15m
+  - platform: state
+    entity_id: !input helper_timer
+    from: "active"
+    to: "idle"
+    id: Timer Completed
+
+action:
+  - choose:
+      # ------------------------------------------------------
+      # TRIGGER: MOTION DETECTED
+      # ------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: Occupancy
+          - condition: state
+            entity_id: !input helper_paused
+            state: "off"
+        sequence:
+          # Check Lux (if configured)
+          - if:
+              - condition: template
+                value_template: >
+                  {% set lux_entity = user_inputs.get('illuminance_sensor') %}
+                  {% if lux_entity %}
+                    {{ states(lux_entity) | float(100) < user_inputs.get('illuminance_threshold') | float(50) }}
+                  {% else %}
+                    {{ true }}
+                  {% endif %}
+            then:
+              # Determine Day or Night Scene
+              - if:
+                  - condition: time
+                    after: !input time_day_start
+                    before: !input time_night_start
+                then:
+                  - service: scene.turn_on
+                    target:
+                      entity_id: !input day_scene
+                else:
+                  - service: scene.turn_on
+                    target:
+                      entity_id: !input night_scene
+              
+              # Set Active Helper
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: !input helper_active
+              
+              # Turn on Status LED (if configured)
+              - choose:
+                - conditions: "{{ status_led is defined }}"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: !input status_led
+
+          # If timer was running (re-entry), pause it and keep active
+          - if:
+              - condition: state
+                entity_id: !input helper_timer
+                state: "active"
+            then:
+              - service: timer.pause
+                target:
+                  entity_id: !input helper_timer
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: !input helper_active
+              - choose:
+                - conditions: "{{ status_led is defined }}"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: !input status_led
+
+      # ------------------------------------------------------
+      # TRIGGER: MOTION CLEARED
+      # ------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: Occupancy Cleared
+          - condition: state
+            entity_id: !input helper_active
+            state: "on"
+        sequence:
+          - if:
+              - condition: state
+                entity_id: !input helper_paused
+                state: "off"
+            then:
+              # Start Timer based on Day/Night
+              - if:
+                  - condition: time
+                    after: !input time_day_start
+                    before: !input time_night_start
+                then:
+                  - service: timer.start
+                    target:
+                      entity_id: !input helper_timer
+                    data:
+                      duration: 
+                        minutes: !input delay_day
+                else:
+                  - service: timer.start
+                    target:
+                      entity_id: !input helper_timer
+                    data:
+                      duration: 
+                        minutes: !input delay_night
+
+      # ------------------------------------------------------
+      # TRIGGER: SWITCH OFF (MANUAL OVERRIDE)
+      # ------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: Light Switch Off
+        sequence:
+          - if:
+              - condition: state
+                entity_id: !input helper_active
+                state: "on"
+            then:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: !input helper_paused
+          - service: scene.turn_on
+            target:
+              entity_id: !input off_scene
+
+      # ------------------------------------------------------
+      # TRIGGER: SWITCH ON (MANUAL ACTIVATE)
+      # ------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: Light Switch On
+        sequence:
+          - if:
+              - condition: state
+                entity_id: !input helper_paused
+                state: "on"
+            then:
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: !input helper_paused
+          
+          # Default to Day Scene on manual switch
+          - service: scene.turn_on
+            target:
+              entity_id: !input day_scene
+          
+          # If no one is actually there, start the timer immediately
+          - if:
+              - condition: state
+                entity_id: !input motion_sensor
+                state: "off"
+            then:
+              - service: timer.start
+                target:
+                  entity_id: !input helper_timer
+                data:
+                  duration: 
+                    minutes: !input delay_day
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: !input helper_active
+              - choose:
+                - conditions: "{{ status_led is defined }}"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: !input status_led
+
+      # ------------------------------------------------------
+      # TRIGGER: FAILSAFE (15M CLEAR)
+      # ------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: Occupancy Cleared 15m
+        sequence:
+          - service: scene.turn_on
+            target:
+              entity_id: !input off_scene
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input helper_paused
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input helper_active
+
+      # ------------------------------------------------------
+      # TRIGGER: TIMER FINISHED
+      # ------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: Timer Completed
+        sequence:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input helper_paused
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input helper_active
+          - choose:
+            - conditions: "{{ status_led is defined }}"
+              sequence:
+                - service: light.turn_off
+                  target:
+                    entity_id: !input status_led
+          - service: scene.turn_on
+            target:
+              entity_id: !input off_scene
+
+variables:
+  user_inputs: 
+    illuminance_sensor: !input illuminance_sensor
+    illuminance_threshold: !input illuminance_threshold
+  status_led: !input status_led
