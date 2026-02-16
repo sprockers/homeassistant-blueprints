@@ -1,21 +1,22 @@
 blueprint:
   name: Advanced Sensor Lights with Switch Override
   description: >
+    Version: 0.9.1<br>
     A comprehensive motion light controller that handles Day/Night scenes, 
-    Lux sensors, and manual switch overrides.
+    Lux sensors, and manual switch overrides.<p>
     
-    Logic Features:
-    - distinct Day and Night scenes based on time.
-    - distinct timeouts for Day and Night.
-    - Manual "Switch Off" pauses the sensor (lights stay off even if you move).
-    - Manual "Switch On" activates the lights and auto-off timer (if room is empty).
+    Logic Features:<br>
+    - distinct Day and Night scenes based on time.<br>
+    - distinct timeouts for Day and Night.<br>
+    - Manual "Switch Off" pauses the sensor (lights stay off even if you move).<br>
+    - Manual "Switch On" activates the lights and auto-off timer (if room is empty).<p>
     
-    REQUIRED HELPERS:
+    REQUIRED HELPERS:<br>
     You must create a Timer and two Input Booleans (Active & Paused) for this blueprint to function.
   domain: automation
   input:
     motion_sensor:
-      name: Motion Sensor
+      name: Occupancy Sensor (Required)
       description: The binary sensor detecting occupancy.
       selector:
         entity:
@@ -23,8 +24,8 @@ blueprint:
           device_class: occupancy
     
     switch_entity:
-      name: Physical Switch
-      description: The physical switch or entity used for manual control.
+      name: Light Switch (Required)
+      description: The physical light switch used for manual control.
       selector:
         entity:
           domain: 
@@ -33,7 +34,7 @@ blueprint:
 
     helper_timer:
       name: Timer Helper (Required)
-      description: Create a timer entity (e.g. timer.kitchen_timeout).
+      description: Used to count down time between occupancy timeout and the lights switching off (e.g. timer.kitchen_timeout).
       selector:
         entity:
           domain: timer
@@ -46,8 +47,8 @@ blueprint:
           domain: input_boolean
 
     helper_paused:
-      name: Manual Pause Helper (Required)
-      description: Boolean to track manual override (e.g. input_boolean.kitchen_paused).
+      name: Pause Status Helper (Required)
+      description: Boolean to track manual override via the light switch (e.g. input_boolean.kitchen_paused).
       selector:
         entity:
           domain: input_boolean
@@ -82,7 +83,7 @@ blueprint:
     time_day_start:
       name: Day Start Time
       description: Time when "Day Scene" becomes active.
-      default: "08:00:00"
+      default: "07:00:00"
       selector:
         time:
 
@@ -95,22 +96,22 @@ blueprint:
 
     delay_day:
       name: Day Timeout (Minutes)
-      description: How long to wait after motion clears during the day.
-      default: 10
+      description: Delay between occupancy clearing and lights turning off during the day.
+      default: 2
       selector:
         number:
-          min: 1
-          max: 120
+          min: 0
+          max: 10
           unit_of_measurement: minutes
 
     delay_night:
       name: Night Timeout (Minutes)
-      description: How long to wait after motion clears during the night.
-      default: 5
+      description: Delay between occupancy clearing and lights turning off during the night.
+      default: 1
       selector:
         number:
-          min: 1
-          max: 120
+          min: 0
+          max: 10
           unit_of_measurement: minutes
 
     illuminance_sensor:
@@ -134,7 +135,7 @@ blueprint:
 
     status_led:
       name: Status LED (Optional)
-      description: An LED on the sensor to turn on/off with the lights (from original automation).
+      description: An LED on the sensor to turn on/off with the lights.
       default: []
       selector:
         entity:
