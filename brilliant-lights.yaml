@@ -5,7 +5,7 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.2*<p>
+    *Version: 0.9.3*<p>
 
 
     A comprehensive lighting scene controller which triggers
@@ -300,13 +300,13 @@ blueprint:
             boolean:
         additional_input_entity:
           name: Inputs
-          default: []
+          default:
           selector:
             entity:
               domain:
                 - binary_sensor
                 - input_boolean
-              multiple: true
+              multiple: false
               reorder: false
     additional_actions:
       name: Additional Actions (Optional)
@@ -331,6 +331,7 @@ blueprint:
           description: >
             Scene to run uwhen the automation becomes active
           selector:
+            default:
             entity:
               domain:
                 - scene
@@ -341,6 +342,7 @@ blueprint:
           description: >
             Scene to run when the automation becomes inactive
           selector:
+            default:
             entity:
               domain:
                 - scene
