@@ -389,12 +389,7 @@ trigger:
     id: Occupancy Cleared
   - platform: state
     entity_id: !input light_switch
-    to: 'on'
-    id: Light Switch On
-  - platform: state
-    entity_id: !input light_switch
-    to: 'off'
-    id: Light Switch Off
+    id: Light Switch Toggle
   - platform: state
     entity_id: !input occupancy_sensor
     to: 'off'
@@ -541,85 +536,107 @@ action:
 
           - conditions:
               - condition: trigger
-                id: Light Switch Off
+                id: Light Switch Toggle
             sequence:
-              - if:
-                  - condition: state
-                    entity_id: !input helper_active
-                    state:
-                      - "on"
-                then:
-                  - action: input_boolean.turn_on
-                    metadata: {}
-                    target:
-                      entity_id: !input helper_paused
-                    data: {}
-              - action: scene.turn_on
-                metadata: {}
-                target:
-                  entity_id: !input off_scene
-                data: {}
-              - delay: 2
-
-          - conditions:
-              - condition: trigger
-                id: Light Switch On
-            sequence:
-              - if:
-                  - condition: state
-                    entity_id: !input helper_paused
-                    state:
-                      - "on"
-                then:
-                  - action: input_boolean.turn_off
-                    metadata: {}
-                    target:
-                      entity_id: !input helper_paused
-                    data: {}
-              - if:
-                  - condition: time
-                    after: !input time_day_start
-                    before: !input time_night_start
-                then:
-                  - action: scene.turn_on
-                    metadata: {}
-                    target:
-                      entity_id: !input day_scene
-                    data: {}
-                else:
-                  - action: scene.turn_on
-                    metadata: {}
-                    target:
-                      entity_id: !input night_scene
-                    data: {}
-              - action: input_boolean.turn_on
-                metadata: {}
-                target:
-                  entity_id: !input helper_active
-                data: {}
-              - if:
-                  - condition: template
-                    value_template: "{{ active_scene | length > 0 }}"
-                then:
-                  - action: scene.turn_on
-                    metadata: {}
-                    target:
-                      entity_id: !input active_scene
-                    data: {}
-              - if:
-                  - condition: state
-                    entity_id: !input occupancy_sensor
-                    state:
-                      - "off"
-                then:
-                  - action: timer.start
-                    metadata: {}
-                    target:
-                      entity_id: !input helper_timer
-                    data:
-                      duration: >-
-                        00:{{ delay_day }}:00
-              - delay: 2
+              - choose:
+                  - conditions:
+                      - condition: state
+                        entity_id: !input helper_active
+                        state: "on"
+                      - condition: state
+                        entity_id: !input helper_paused
+                        state: "off"
+                    sequence:
+                      - action: input_boolean.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input helper_paused
+                        data: {}
+                      - action: scene.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input off_scene
+                        data: {}
+                      - delay: 2
+                  - conditions:
+                      - condition: state
+                        entity_id: !input helper_active
+                        state: "on"
+                      - condition: state
+                        entity_id: !input helper_paused
+                        state: "on"
+                    sequence:
+                      - action: input_boolean.turn_off
+                        metadata: {}
+                        target:
+                          entity_id: !input helper_paused
+                        data: {}
+                      - if:
+                          - condition: time
+                            after: !input time_day_start
+                            before: !input time_night_start
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input day_scene
+                            data: {}
+                        else:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input night_scene
+                            data: {}
+                      - delay: 2
+                  - conditions:
+                      - condition: state
+                        entity_id: !input helper_active
+                        state: "off"
+                    sequence:
+                      - action: input_boolean.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input helper_active
+                        data: {}
+                      - if:
+                          - condition: time
+                            after: !input time_day_start
+                            before: !input time_night_start
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input day_scene
+                            data: {}
+                        else:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input night_scene
+                            data: {}
+                      - if:
+                          - condition: template
+                            value_template: "{{ active_scene | length > 0 }}"
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input active_scene
+                            data: {}
+                      - if:
+                          - condition: state
+                            entity_id: !input occupancy_sensor
+                            state:
+                              - "off"
+                        then:
+                          - action: timer.start
+                            metadata: {}
+                            target:
+                              entity_id: !input helper_timer
+                            data:
+                              duration: >-
+                                00:{{ delay_day }}:00
+                      - delay: 2
 
           - conditions:
               - condition: trigger
