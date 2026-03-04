@@ -5,7 +5,7 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.4*<p>
+    *Version: 0.9.5*<p>
 
 
     A stateful lighting scene controller which triggers
@@ -80,6 +80,10 @@ blueprint:
         - You can optionally enable config to restrict the hours between which
           the automation can activate
         - The hours you specify can be across two days if needed
+        - By default at the end of the limited time block the automation will
+          beecome inactive, but the lights will stay on
+        - You can optionally choose for the lights to turn off at the end of the
+          limited time block
       - Restrict to Low Lux
         - You can optionally enable config to restrict the activation of the
           automation to times when the lux level in the room is below a
@@ -94,8 +98,8 @@ blueprint:
       description: >
         The following sensors are the primary input triggers for your
         automation.<br>
-        The automation will activate when occupancy or motion is detected, or when
-        someone presses the light switch.<br>
+        The automation will activate when occupancy or motion is detected, or
+        when someone presses the light switch.<br>
         *Tip: If you have more than one sensor, create a group helper and
         then use that here.*
       icon: mdi:home-import-outline
@@ -305,7 +309,7 @@ blueprint:
       icon: mdi:clock-check
       collapsed: true
       input:
-        restrict_hours_enabled:
+        restricted_hours_enabled:
           name: Enable Restricted Hours
           default: false
           selector:
@@ -322,6 +326,16 @@ blueprint:
           default: '23:00:00'
           selector:
             time: {}
+        off_at_restriction_end:
+          name: Turn Off?
+          description: >
+            By default, when the end of the restricted hours is reached
+            the automation will become inactive, but the lights will remain
+            on.<br>
+            Enabling this toggle will turn the lights off instead.
+          default: false
+          selector:
+            boolean: {}
     low_lux:
       name: Restrict to Low Lux
       description: >
@@ -390,6 +404,9 @@ trigger:
     from: active
     to: idle
     id: Timer Completed
+  - platform: time
+    at: !input restricted_hours_until
+    id: End Restricted Hours
 action:
   - if:
       - condition: or
@@ -415,11 +432,11 @@ action:
                       - condition: or
                         conditions:
                           - condition: template
-                            value_template: "{{ not restrict_hours_enabled }}"
+                            value_template: "{{ not restricted_hours_enabled }}"
                           - condition: and
                             conditions:
                               - condition: template
-                                value_template: "{{ restrict_hours_enabled }}"
+                                value_template: "{{ restricted_hours_enabled }}"
                               - condition: time
                                 after: !input restricted_hours_from
                                 before: !input restricted_hours_until
@@ -633,10 +650,45 @@ action:
                       entity_id: !input inactive_scene
                     data: {}
 
+          - conditions:
+              - condition: and
+                conditions:
+                  - condition: trigger
+                    id: End Restricted Hours
+                  - condition: template
+                    value_template: "{{ restricted_hours_enabled }}"
+            sequence:
+              - action: input_boolean.turn_off
+                metadata: {}
+                target:
+                  entity_id:
+                    - !input helper_paused
+                    - !input helper_active
+                data: {}
+              - if:
+                  - condition: template
+                    value_template: "{{ off_at_restriction_end }}"
+                then:
+                  - action: scene.turn_on
+                    metadata: {}
+                    target:
+                      entity_id: !input off_scene
+                    data: {}
+              - if:
+                  - condition: template
+                    value_template: "{{ inactive_scene | length > 0 }}"
+                then:
+                  - action: scene.turn_on
+                    metadata: {}
+                    target:
+                      entity_id: !input inactive_scene
+                    data: {}
+
 variables:
   delay_day: !input delay_day
   delay_night: !input delay_night
-  restrict_hours_enabled: !input restrict_hours_enabled
+  restricted_hours_enabled: !input restricted_hours_enabled
+  off_at_restriction_end: !input off_at_restriction_end
   low_lux_enabled: !input low_lux_enabled
   illuminance_sensor: !input illuminance_sensor
   illuminance_threshold: !input illuminance_threshold
