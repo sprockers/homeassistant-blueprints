@@ -5,7 +5,7 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.4*<p>
+    *Version: 0.9.5*<p>
 
 
     A stateful lighting scene controller which triggers
@@ -60,6 +60,8 @@ blueprint:
           on and off scenes, as e.g. the Off scene will fire when the automation
           becomes paused. The Inactive scene does not fire at this point,
           because the automation remains active when this happens
+        - Scenes are switched between at their respective times of day if the
+          automation is active
       - Countdown Timer
         - Lights turning off (and automation becoming inactive) are triggered by
           the room becoming unoccupied
@@ -80,6 +82,10 @@ blueprint:
         - You can optionally enable config to restrict the hours between which
           the automation can activate
         - The hours you specify can be across two days if needed
+        - By default at the end of the limited time block the automation will
+          beecome inactive, but the lights will stay on
+        - You can optionally choose for the lights to turn off at the end of the
+          limited time block
       - Restrict to Low Lux
         - You can optionally enable config to restrict the activation of the
           automation to times when the lux level in the room is below a
@@ -94,8 +100,8 @@ blueprint:
       description: >
         The following sensors are the primary input triggers for your
         automation.<br>
-        The automation will activate when occupancy or motion is detected, or when
-        someone presses the light switch.<br>
+        The automation will activate when occupancy or motion is detected, or
+        when someone presses the light switch.<br>
         *Tip: If you have more than one sensor, create a group helper and
         then use that here.*
       icon: mdi:home-import-outline
@@ -305,7 +311,7 @@ blueprint:
       icon: mdi:clock-check
       collapsed: true
       input:
-        restrict_hours_enabled:
+        restricted_hours_enabled:
           name: Enable Restricted Hours
           default: false
           selector:
@@ -322,6 +328,16 @@ blueprint:
           default: '23:00:00'
           selector:
             time: {}
+        off_at_restriction_end:
+          name: Turn Off?
+          description: >
+            By default, when the end of the restricted hours is reached
+            the automation will become inactive, but the lights will remain
+            on.<br>
+            Enabling this toggle will turn the lights off instead.
+          default: false
+          selector:
+            boolean: {}
     low_lux:
       name: Restrict to Low Lux
       description: >
@@ -373,12 +389,7 @@ trigger:
     id: Occupancy Cleared
   - platform: state
     entity_id: !input light_switch
-    to: 'on'
-    id: Light Switch On
-  - platform: state
-    entity_id: !input light_switch
-    to: 'off'
-    id: Light Switch Off
+    id: Light Switch Toggle
   - platform: state
     entity_id: !input occupancy_sensor
     to: 'off'
@@ -390,6 +401,16 @@ trigger:
     from: active
     to: idle
     id: Timer Completed
+  - platform: time
+    at: !input restricted_hours_until
+    id: End Restricted Hours
+  - platform: time
+    at: !input time_day_start
+    id: Time Day Start
+  - platform: time
+    at: !input time_night_start
+    id: Time Night Start
+
 action:
   - if:
       - condition: or
@@ -415,11 +436,11 @@ action:
                       - condition: or
                         conditions:
                           - condition: template
-                            value_template: "{{ not restrict_hours_enabled }}"
+                            value_template: "{{ not restricted_hours_enabled }}"
                           - condition: and
                             conditions:
                               - condition: template
-                                value_template: "{{ restrict_hours_enabled }}"
+                                value_template: "{{ restricted_hours_enabled }}"
                               - condition: time
                                 after: !input restricted_hours_from
                                 before: !input restricted_hours_until
@@ -466,6 +487,7 @@ action:
                         target:
                           entity_id: !input active_scene
                         data: {}
+                  - delay: 2
               - if:
                   - condition: state
                     entity_id: !input helper_timer
@@ -514,72 +536,107 @@ action:
 
           - conditions:
               - condition: trigger
-                id: Light Switch Off
+                id: Light Switch Toggle
             sequence:
-              - if:
-                  - condition: state
-                    entity_id: !input helper_active
-                    state:
-                      - "on"
-                then:
-                  - action: input_boolean.turn_on
-                    metadata: {}
-                    target:
-                      entity_id: !input helper_paused
-                    data: {}
-              - action: scene.turn_on
-                metadata: {}
-                target:
-                  entity_id: !input off_scene
-                data: {}
-
-          - conditions:
-              - condition: trigger
-                id: Light Switch On
-            sequence:
-              - if:
-                  - condition: state
-                    entity_id: !input helper_paused
-                    state:
-                      - "on"
-                then:
-                  - action: input_boolean.turn_off
-                    metadata: {}
-                    target:
-                      entity_id: !input helper_paused
-                    data: {}
-              - action: scene.turn_on
-                metadata: {}
-                target:
-                  entity_id: !input day_scene
-                data: {}
-              - action: input_boolean.turn_on
-                metadata: {}
-                target:
-                  entity_id: !input helper_active
-                data: {}
-              - if:
-                  - condition: template
-                    value_template: "{{ active_scene | length > 0 }}"
-                then:
-                  - action: scene.turn_on
-                    metadata: {}
-                    target:
-                      entity_id: !input active_scene
-                    data: {}
-              - if:
-                  - condition: state
-                    entity_id: !input occupancy_sensor
-                    state:
-                      - "off"
-                then:
-                  - action: timer.start
-                    metadata: {}
-                    target:
-                      entity_id: !input helper_timer
-                    data:
-                      duration: >-
-                        00:{{ delay_day }}:00
+              - choose:
+                  - conditions:
+                      - condition: state
+                        entity_id: !input helper_active
+                        state: "on"
+                      - condition: state
+                        entity_id: !input helper_paused
+                        state: "off"
+                    sequence:
+                      - action: input_boolean.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input helper_paused
+                        data: {}
+                      - action: scene.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input off_scene
+                        data: {}
+                      - delay: 2
+                  - conditions:
+                      - condition: state
+                        entity_id: !input helper_active
+                        state: "on"
+                      - condition: state
+                        entity_id: !input helper_paused
+                        state: "on"
+                    sequence:
+                      - action: input_boolean.turn_off
+                        metadata: {}
+                        target:
+                          entity_id: !input helper_paused
+                        data: {}
+                      - if:
+                          - condition: time
+                            after: !input time_day_start
+                            before: !input time_night_start
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input day_scene
+                            data: {}
+                        else:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input night_scene
+                            data: {}
+                      - delay: 2
+                  - conditions:
+                      - condition: state
+                        entity_id: !input helper_active
+                        state: "off"
+                    sequence:
+                      - action: input_boolean.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input helper_active
+                        data: {}
+                      - if:
+                          - condition: time
+                            after: !input time_day_start
+                            before: !input time_night_start
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input day_scene
+                            data: {}
+                        else:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input night_scene
+                            data: {}
+                      - if:
+                          - condition: template
+                            value_template: "{{ active_scene | length > 0 }}"
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input active_scene
+                            data: {}
+                      - if:
+                          - condition: state
+                            entity_id: !input occupancy_sensor
+                            state:
+                              - "off"
+                        then:
+                          - action: timer.start
+                            metadata: {}
+                            target:
+                              entity_id: !input helper_timer
+                            data:
+                              duration: >-
+                                00:{{ delay_day }}:00
+                      - delay: 2
 
           - conditions:
               - condition: trigger
@@ -632,11 +689,82 @@ action:
                     target:
                       entity_id: !input inactive_scene
                     data: {}
+              - delay: 2
+
+          - conditions:
+              - condition: and
+                conditions:
+                  - condition: trigger
+                    id: End Restricted Hours
+                  - condition: template
+                    value_template: "{{ restricted_hours_enabled }}"
+            sequence:
+              - action: input_boolean.turn_off
+                metadata: {}
+                target:
+                  entity_id:
+                    - !input helper_paused
+                    - !input helper_active
+                data: {}
+              - if:
+                  - condition: template
+                    value_template: "{{ off_at_restriction_end }}"
+                then:
+                  - action: scene.turn_on
+                    metadata: {}
+                    target:
+                      entity_id: !input off_scene
+                    data: {}
+              - if:
+                  - condition: template
+                    value_template: "{{ inactive_scene | length > 0 }}"
+                then:
+                  - action: scene.turn_on
+                    metadata: {}
+                    target:
+                      entity_id: !input inactive_scene
+                    data: {}
+              - delay: 2
+
+          - conditions:
+              - condition: trigger
+                id: Time Day Start
+              - condition: state
+                entity_id: !input helper_active
+                state: "on"
+              - condition: state
+                entity_id: !input helper_paused
+                state: "off"
+            sequence:
+              - action: scene.turn_on
+                metadata: {}
+                target:
+                  entity_id: !input day_scene
+                data: {}
+              - delay: 2
+
+          - conditions:
+              - condition: trigger
+                id: Time Night Start
+              - condition: state
+                entity_id: !input helper_active
+                state: "on"
+              - condition: state
+                entity_id: !input helper_paused
+                state: "off"
+            sequence:
+              - action: scene.turn_on
+                metadata: {}
+                target:
+                  entity_id: !input night_scene
+                data: {}
+              - delay: 2
 
 variables:
   delay_day: !input delay_day
   delay_night: !input delay_night
-  restrict_hours_enabled: !input restrict_hours_enabled
+  restricted_hours_enabled: !input restricted_hours_enabled
+  off_at_restriction_end: !input off_at_restriction_end
   low_lux_enabled: !input low_lux_enabled
   illuminance_sensor: !input illuminance_sensor
   illuminance_threshold: !input illuminance_threshold
