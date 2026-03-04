@@ -727,16 +727,14 @@ action:
               - delay: 2
 
           - conditions:
-              - condition: and
-                conditions:
-                  - condition: trigger
-                    id: Time Day Start
-                  - condition: state
-                    entity_id: !input helper_active
-                    state: "on"
-                  - condition: state
-                    entity_id: !input helper_paused
-                    state: "off"
+              - condition: trigger
+                id: Time Day Start
+              - condition: state
+                entity_id: !input helper_active
+                state: "on"
+              - condition: state
+                entity_id: !input helper_paused
+                state: "off"
             sequence:
               - action: scene.turn_on
                 metadata: {}
@@ -746,16 +744,14 @@ action:
               - delay: 2
 
           - conditions:
-              - condition: and
-                conditions:
-                  - condition: trigger
-                    id: Time Night Start
-                  - condition: state
-                    entity_id: !input helper_active
-                    state: "on"
-                  - condition: state
-                    entity_id: !input helper_paused
-                    state: "off"
+              - condition: trigger
+                id: Time Night Start
+              - condition: state
+                entity_id: !input helper_active
+                state: "on"
+              - condition: state
+                entity_id: !input helper_paused
+                state: "off"
             sequence:
               - action: scene.turn_on
                 metadata: {}
