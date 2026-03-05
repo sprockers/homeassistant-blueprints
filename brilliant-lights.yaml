@@ -1,3 +1,4 @@
+---
 blueprint:
   name: Brilliant Lights
   author: Chris Wood
@@ -5,7 +6,7 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.5*<p>
+    *Version: 0.9.6*<p>
 
 
     A stateful lighting scene controller which triggers
@@ -378,6 +379,19 @@ blueprint:
   source_url: >
     https://raw.githubusercontent.com/sprockers/homeassistant-blueprints/refs/heads/main/brilliant-lights.yaml
 mode: single
+
+variables:
+  delay_day: !input delay_day
+  delay_night: !input delay_night
+  restricted_hours_enabled: !input restricted_hours_enabled
+  off_at_restriction_end: !input off_at_restriction_end
+  low_lux_enabled: !input low_lux_enabled
+  illuminance_sensor: !input illuminance_sensor
+  illuminance_threshold: !input illuminance_threshold
+  additional_input_entity: !input additional_input_entity
+  active_scene: !input active_scene
+  inactive_scene: !input inactive_scene
+
 trigger:
   - platform: state
     entity_id: !input occupancy_sensor
@@ -759,15 +773,3 @@ action:
                   entity_id: !input night_scene
                 data: {}
               - delay: 2
-
-variables:
-  delay_day: !input delay_day
-  delay_night: !input delay_night
-  restricted_hours_enabled: !input restricted_hours_enabled
-  off_at_restriction_end: !input off_at_restriction_end
-  low_lux_enabled: !input low_lux_enabled
-  illuminance_sensor: !input illuminance_sensor
-  illuminance_threshold: !input illuminance_threshold
-  additional_input_entity: !input additional_input_entity
-  active_scene: !input active_scene
-  inactive_scene: !input inactive_scene
