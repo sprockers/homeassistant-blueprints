@@ -272,50 +272,51 @@ blueprint:
     countdown:
       name: Countdown Timer And Durations
       description: >
-        When occupancy times out, a countdown timer is started.<br>
-        When the timer completes, the lights are switched off and the
-        automation becomes inactive.<br>
-        You may choose different timer durations during day and night hours.
+        Want to delay the lights switching off when occupancy clears?<br>
+        Enable this optional section to start a countdown timer upon
+        occupancy clearing. You can specify different timer durations
+        for day and night time periods.<br>
+        You may find this useful if your occupancy sensors are not good
+        at observing people who are sitting down, resulting in unexpected
+        occupancy timeouts.
       icon: mdi:timer-check
       collapsed: true
       input:
-        helper_timer:
-          name: Timer Helper (Required)
+        countdown_timer_enabled:
+          name: Countdown Timer Enabled
+          default: false
+          selector:
+            boolean: {}
+        countdown_timer_entity:
+          name: Timer Helper
           description: >
             Used to count down time between occupancy clearing and the lights
             switching off.
+          default:
           selector:
             entity:
               domain:
                 - timer
               multiple: false
               reorder: false
-        delay_day:
+        countdown_duration_day:
           name: Timer Duration - Day
           description: >
             Delay between occupancy clearing and lights turning off during the
             day.
-          default: 2
+          default: '00:02:00'
           selector:
-            number:
-              min: 0
-              max: 30
-              unit_of_measurement: minutes
-              step: 0.5
-              mode: slider
-        delay_night:
+            duration:
+              enable_day: false
+        countdown_duration_night:
           name: Timer Duration - Night
           description: >
             Delay between occupancy clearing and lights turning off during the
             night.
-          default: 1
+          default: '00:01:00'
           selector:
-            number:
-              min: 0
-              max: 30
-              unit_of_measurement: minutes
-              step: 0.5
-              mode: slider
+            duration:
+              enable_day: false
     restricted_hours:
       name: Restrict Hours
       description: >
@@ -340,7 +341,7 @@ blueprint:
         restricted_hours_until:
           name: Enabled Until
           description: Time until which the automation is active
-          default: '23:00:00'
+          default: '09:00:00'
           selector:
             time: {}
         off_at_restriction_end:
@@ -395,8 +396,6 @@ blueprint:
 mode: single
 
 variables:
-  delay_day: !input delay_day
-  delay_night: !input delay_night
   restricted_hours_enabled: !input restricted_hours_enabled
   off_at_restriction_end: !input off_at_restriction_end
   low_lux_enabled: !input low_lux_enabled
@@ -405,6 +404,7 @@ variables:
   additional_input_entity: !input additional_input_entity
   active_scene: !input active_scene
   inactive_scene: !input inactive_scene
+  countdown_timer_enabled: !input countdown_timer_enabled
 
 trigger:
   - platform: state
@@ -425,7 +425,7 @@ trigger:
       minutes: 15
     id: Occupancy Cleared 15m
   - platform: state
-    entity_id: !input helper_timer
+    entity_id: !input countdown_timer_entity
     from: active
     to: idle
     id: Timer Completed
@@ -518,14 +518,14 @@ action:
                   - delay: 2
               - if:
                   - condition: state
-                    entity_id: !input helper_timer
+                    entity_id: !input countdown_timer_entity
                     state:
                       - active
                 then:
                   - action: timer.pause
                     metadata: {}
                     target:
-                      entity_id: !input helper_timer
+                      entity_id: !input countdown_timer_entity
                     data: {}
 
           - conditions:
@@ -535,32 +535,56 @@ action:
                 entity_id: !input active_status_entity
                 state: 'on'
             sequence:
-
               - if:
                   - condition: state
                     entity_id: !input paused_status_entity
                     state:
                       - "off"
                     enabled: true
-                  - condition: time
-                    after: !input time_day_start
-                    before: !input time_night_start
+                  - condition: template
+                    value_template: "{{ countdown_timer_enabled }}"
                 then:
-                  - action: timer.start
-                    metadata: {}
-                    target:
-                      entity_id: !input helper_timer
-                    data:
-                      duration: >-
-                        00:{{ delay_day }}:00
+                  - if:
+                      - condition: time
+                        after: !input time_day_start
+                        before: !input time_night_start
+                    then:
+                      - action: timer.start
+                        metadata: {}
+                        target:
+                          entity_id: !input countdown_timer_entity
+                        data:
+                          duration: !input countdown_duration_day
+                    else:
+                      - action: timer.start
+                        metadata: {}
+                        target:
+                          entity_id: !input countdown_timer_entity
+                        data:
+                          duration: !input countdown_duration_night
                 else:
-                  - action: timer.start
+                  - action: input_boolean.turn_off
                     metadata: {}
                     target:
-                      entity_id: !input helper_timer
-                    data:
-                      duration: >-
-                        00:{{ delay_night }}:00
+                      entity_id:
+                        - !input paused_status_entity
+                        - !input active_status_entity
+                    data: {}
+                  - action: scene.turn_on
+                    metadata: {}
+                    target:
+                      entity_id: !input off_scene
+                    data: {}
+                  - if:
+                      - condition: template
+                        value_template: "{{ inactive_scene | length > 0 }}"
+                    then:
+                      - action: scene.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input inactive_scene
+                        data: {}
+                  - delay: 2
 
           - conditions:
               - condition: trigger
@@ -660,10 +684,10 @@ action:
                           - action: timer.start
                             metadata: {}
                             target:
-                              entity_id: !input helper_timer
+                              entity_id: !input countdown_timer_entity
                             data:
                               duration: >-
-                                00:{{ delay_day }}:00
+                                00:{{ countdown_duration_day }}:00
                       - delay: 2
 
           - conditions:
