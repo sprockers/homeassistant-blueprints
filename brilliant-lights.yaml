@@ -1,3 +1,4 @@
+---
 blueprint:
   name: Brilliant Lights
   author: Chris Wood
@@ -5,21 +6,29 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.5*<p>
+    *Version: 0.9.6*<p>
 
 
     A stateful lighting scene controller which triggers
-    from occupancy and light switch sensors.<p>
+    from occupancy and light-related entities.<p>
 
 
     <details>
 
 
-    - **Triggers:**
-      - Occupancy/motion binary sensor or group
-      - Light switch sensor or group
-      - An optional binary/boolean entity or group which must be true
-        otherwise the automation will not activate
+    - **Inputs:**
+      - Occupancy/motion `binary_sensor` entity or group helper
+        - The automation activates when occupancy is detected
+        - The automation stays active until occupancy clears
+        - Other settings refine the above basic operating states
+      - Light-related `switch` or `light` entity or group helper
+        - Turning on or off a physical smart switch or a light entity in
+          the UI acts as a trigger for the automation
+        - If the automation was inactive, then it is activated
+        - If the automation was already active, then it is paused
+        - See Key Concepts below for definitions of active and paused states
+      - An optional `binary_sensor` or `input_boolean` entity or group helper
+        - The automation will not activate if this input is `false`/`off`
 
 
     - **Key Concepts:**
@@ -62,15 +71,16 @@ blueprint:
           because the automation remains active when this happens
         - Scenes are switched between at their respective times of day if the
           automation is active
-      - Countdown Timer
+      - Countdown Timer (Optional)
         - Lights turning off (and automation becoming inactive) are triggered by
           the room becoming unoccupied
-          However, the lights do not immediately go out when occupancy clears
-        - Instead, a timer is started
+        - However, with this option enabled the lights do not immediately go
+          out when occupancy clears
+        - Instead, a countdown timer is started
         - When the timer reaches zero, the lights are turned off, and the
           automation becomes inactive
         - If occupancy recurs before the countdown completes, then the countdown
-          is terminated
+          is terminated, and the automation stays active
         - You can set different timer durations during day and night hours
         - The timer is designed to smooth out short periods of no occupancy
           being detected. Perhaps your room gets regular footfall and you don't
@@ -78,7 +88,7 @@ blueprint:
           occupancy sensor can be a little poor at detecting people who are
           sitting down for a while...
         - You must create your timer helper outside of the automation
-      - Restrict Hours
+      - Restrict Hours (Optional)
         - You can optionally enable config to restrict the hours between which
           the automation can activate
         - The hours you specify can be across two days if needed
@@ -86,7 +96,7 @@ blueprint:
           beecome inactive, but the lights will stay on
         - You can optionally choose for the lights to turn off at the end of the
           limited time block
-      - Restrict to Low Lux
+      - Restrict to Low Lux (Optional)
         - You can optionally enable config to restrict the activation of the
           automation to times when the lux level in the room is below a
           given value
@@ -96,18 +106,18 @@ blueprint:
   domain: automation
   input:
     input_sensors:
-      name: Input Sensors (Required)
+      name: Input Entities (Required)
       description: >
-        The following sensors are the primary input triggers for your
+        The following entities are the primary input triggers for your
         automation.<br>
-        The automation will activate when occupancy or motion is detected, or
-        when someone presses the light switch.<br>
-        *Tip: If you have more than one sensor, create a group helper and
+        The automation will activate when occupancy is detected, or
+        when someone toggles the light-related entity.<br>
+        *Tip: If you have more than one entity, create a group helper and
         then use that here.*
       icon: mdi:home-import-outline
       collapsed: true
       input:
-        occupancy_sensor:
+        occupancy_sensor_entity:
           name: Occupancy Sensor (Required)
           description: >
             The binary sensor detecting occupancy or motion.<br>
@@ -120,9 +130,15 @@ blueprint:
                 - motion
               multiple: false
               reorder: false
-        light_switch:
-          name: Light Switch (Required)
-          description: The physical light switch used for manual control.
+        light_switch_entity:
+          name: Light-Related Entity (Required)
+          description: >
+            This represents one or more of the light(s) you are controlling,
+            and can be either a `switch` or `light` entity type.<br>
+            This could be an individual entity, or a group helper entity.<br>
+            The entity provided acts as a trigger for the automation. In other
+            words, if you turn the light on or off via the UI, or with a smart
+            switch then automation will trigger and act appropriately.
           selector:
             entity:
               domain:
@@ -154,7 +170,7 @@ blueprint:
       icon: mdi:state-machine
       collapsed: true
       input:
-        helper_active:
+        active_status_entity:
           name: Active Status Helper (Required)
           description: >
             e.g. `input_boolean.<room_name>_brilliant_lights_active`
@@ -164,7 +180,7 @@ blueprint:
                 - input_boolean
               multiple: false
               reorder: false
-        helper_paused:
+        paused_status_entity:
           name: Pause Status Helper (Required)
           description: >
             e.g. `input_boolean.kitchen_sensor_lights_paused`
@@ -257,50 +273,51 @@ blueprint:
     countdown:
       name: Countdown Timer And Durations
       description: >
-        When occupancy times out, a countdown timer is started.<br>
-        When the timer completes, the lights are switched off and the
-        automation becomes inactive.<br>
-        You may choose different timer durations during day and night hours.
+        Want to delay the lights switching off when occupancy clears?<br>
+        Enable this optional section to start a countdown timer upon
+        occupancy clearing. You can specify different timer durations
+        for day and night time periods.<br>
+        You may find this useful if your occupancy sensors are not good
+        at observing people who are sitting down, resulting in unexpected
+        occupancy timeouts.
       icon: mdi:timer-check
       collapsed: true
       input:
-        helper_timer:
-          name: Timer Helper (Required)
+        countdown_timer_enabled:
+          name: Countdown Timer Enabled
+          default: false
+          selector:
+            boolean: {}
+        countdown_timer_entity:
+          name: Timer Helper
           description: >
             Used to count down time between occupancy clearing and the lights
             switching off.
+          default:
           selector:
             entity:
               domain:
                 - timer
               multiple: false
               reorder: false
-        delay_day:
+        countdown_duration_day:
           name: Timer Duration - Day
           description: >
             Delay between occupancy clearing and lights turning off during the
             day.
-          default: 2
+          default: '00:02:00'
           selector:
-            number:
-              min: 0
-              max: 30
-              unit_of_measurement: minutes
-              step: 0.5
-              mode: slider
-        delay_night:
+            duration:
+              enable_day: false
+        countdown_duration_night:
           name: Timer Duration - Night
           description: >
             Delay between occupancy clearing and lights turning off during the
             night.
-          default: 1
+          default: '00:01:00'
           selector:
-            number:
-              min: 0
-              max: 30
-              unit_of_measurement: minutes
-              step: 0.5
-              mode: slider
+            duration:
+              enable_day: false
     restricted_hours:
       name: Restrict Hours
       description: >
@@ -325,7 +342,7 @@ blueprint:
         restricted_hours_until:
           name: Enabled Until
           description: Time until which the automation is active
-          default: '23:00:00'
+          default: '09:00:00'
           selector:
             time: {}
         off_at_restriction_end:
@@ -352,10 +369,10 @@ blueprint:
           default: false
           selector:
             boolean: {}
-        illuminance_sensor:
+        illuminance_sensor_entity:
           name: Illuminance Sensor
           description: The sensor providing the lux value for the room
-          default: []
+          default:
           selector:
             entity:
               domain:
@@ -378,28 +395,41 @@ blueprint:
   source_url: >
     https://raw.githubusercontent.com/sprockers/homeassistant-blueprints/refs/heads/main/brilliant-lights.yaml
 mode: single
+
+variables:
+  restricted_hours_enabled: !input restricted_hours_enabled
+  off_at_restriction_end: !input off_at_restriction_end
+  low_lux_enabled: !input low_lux_enabled
+  illuminance_sensor_entity: !input illuminance_sensor_entity
+  illuminance_threshold: !input illuminance_threshold
+  additional_input_entity: !input additional_input_entity
+  active_scene: !input active_scene
+  inactive_scene: !input inactive_scene
+  countdown_timer_enabled: !input countdown_timer_enabled
+
+trigger_variables:
+  countdown_timer_entity: !input countdown_timer_entity
+
 trigger:
   - platform: state
-    entity_id: !input occupancy_sensor
+    entity_id: !input occupancy_sensor_entity
     to: 'on'
     id: Occupancy
   - platform: state
-    entity_id: !input occupancy_sensor
+    entity_id: !input occupancy_sensor_entity
     to: 'off'
     id: Occupancy Cleared
   - platform: state
-    entity_id: !input light_switch
+    entity_id: !input light_switch_entity
     id: Light Switch Toggle
   - platform: state
-    entity_id: !input occupancy_sensor
+    entity_id: !input occupancy_sensor_entity
     to: 'off'
     for:
       minutes: 15
     id: Occupancy Cleared 15m
-  - platform: state
-    entity_id: !input helper_timer
-    from: active
-    to: idle
+  - platform: template
+    value_template: "{{ is_state(countdown_timer_entity, 'idle') }}"
     id: Timer Completed
   - platform: time
     at: !input restricted_hours_until
@@ -427,7 +457,7 @@ action:
               - condition: trigger
                 id: Occupancy
               - condition: state
-                entity_id: !input helper_paused
+                entity_id: !input paused_status_entity
                 state: 'off'
             sequence:
               - if:
@@ -454,7 +484,7 @@ action:
                                 value_template: "{{ low_lux_enabled }}"
                               - condition: template
                                 value_template: >
-                                  {{ states(illuminance_sensor)|float <
+                                  {{ states(illuminance_sensor_entity)|float <
                                   illuminance_threshold|float }}
                 then:
                   - if:
@@ -476,7 +506,7 @@ action:
                   - action: input_boolean.turn_on
                     metadata: {}
                     target:
-                      entity_id: !input helper_active
+                      entity_id: !input active_status_entity
                     data: {}
                   - if:
                       - condition: template
@@ -489,50 +519,73 @@ action:
                         data: {}
                   - delay: 2
               - if:
-                  - condition: state
-                    entity_id: !input helper_timer
-                    state:
-                      - active
+                  - condition: template
+                    value_template: >
+                      {{ is_state(countdown_timer_entity, 'active') }}
                 then:
                   - action: timer.pause
                     metadata: {}
                     target:
-                      entity_id: !input helper_timer
+                      entity_id: !input countdown_timer_entity
                     data: {}
 
           - conditions:
               - condition: trigger
                 id: Occupancy Cleared
               - condition: state
-                entity_id: !input helper_active
+                entity_id: !input active_status_entity
                 state: 'on'
             sequence:
-
               - if:
                   - condition: state
-                    entity_id: !input helper_paused
+                    entity_id: !input paused_status_entity
                     state:
                       - "off"
                     enabled: true
-                  - condition: time
-                    after: !input time_day_start
-                    before: !input time_night_start
+                  - condition: template
+                    value_template: "{{ countdown_timer_enabled }}"
                 then:
-                  - action: timer.start
-                    metadata: {}
-                    target:
-                      entity_id: !input helper_timer
-                    data:
-                      duration: >-
-                        00:{{ delay_day }}:00
+                  - if:
+                      - condition: time
+                        after: !input time_day_start
+                        before: !input time_night_start
+                    then:
+                      - action: timer.start
+                        metadata: {}
+                        target:
+                          entity_id: !input countdown_timer_entity
+                        data:
+                          duration: !input countdown_duration_day
+                    else:
+                      - action: timer.start
+                        metadata: {}
+                        target:
+                          entity_id: !input countdown_timer_entity
+                        data:
+                          duration: !input countdown_duration_night
                 else:
-                  - action: timer.start
+                  - action: input_boolean.turn_off
                     metadata: {}
                     target:
-                      entity_id: !input helper_timer
-                    data:
-                      duration: >-
-                        00:{{ delay_night }}:00
+                      entity_id:
+                        - !input paused_status_entity
+                        - !input active_status_entity
+                    data: {}
+                  - action: scene.turn_on
+                    metadata: {}
+                    target:
+                      entity_id: !input off_scene
+                    data: {}
+                  - if:
+                      - condition: template
+                        value_template: "{{ inactive_scene | length > 0 }}"
+                    then:
+                      - action: scene.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input inactive_scene
+                        data: {}
+                  - delay: 2
 
           - conditions:
               - condition: trigger
@@ -541,16 +594,16 @@ action:
               - choose:
                   - conditions:
                       - condition: state
-                        entity_id: !input helper_active
+                        entity_id: !input active_status_entity
                         state: "on"
                       - condition: state
-                        entity_id: !input helper_paused
+                        entity_id: !input paused_status_entity
                         state: "off"
                     sequence:
                       - action: input_boolean.turn_on
                         metadata: {}
                         target:
-                          entity_id: !input helper_paused
+                          entity_id: !input paused_status_entity
                         data: {}
                       - action: scene.turn_on
                         metadata: {}
@@ -560,16 +613,16 @@ action:
                       - delay: 2
                   - conditions:
                       - condition: state
-                        entity_id: !input helper_active
+                        entity_id: !input active_status_entity
                         state: "on"
                       - condition: state
-                        entity_id: !input helper_paused
+                        entity_id: !input paused_status_entity
                         state: "on"
                     sequence:
                       - action: input_boolean.turn_off
                         metadata: {}
                         target:
-                          entity_id: !input helper_paused
+                          entity_id: !input paused_status_entity
                         data: {}
                       - if:
                           - condition: time
@@ -590,13 +643,13 @@ action:
                       - delay: 2
                   - conditions:
                       - condition: state
-                        entity_id: !input helper_active
+                        entity_id: !input active_status_entity
                         state: "off"
                     sequence:
                       - action: input_boolean.turn_on
                         metadata: {}
                         target:
-                          entity_id: !input helper_active
+                          entity_id: !input active_status_entity
                         data: {}
                       - if:
                           - condition: time
@@ -625,17 +678,28 @@ action:
                             data: {}
                       - if:
                           - condition: state
-                            entity_id: !input occupancy_sensor
+                            entity_id: !input occupancy_sensor_entity
                             state:
                               - "off"
                         then:
-                          - action: timer.start
-                            metadata: {}
-                            target:
-                              entity_id: !input helper_timer
-                            data:
-                              duration: >-
-                                00:{{ delay_day }}:00
+                          - if:
+                              - condition: time
+                                after: !input time_day_start
+                                before: !input time_night_start
+                            then:
+                              - action: timer.start
+                                metadata: {}
+                                target:
+                                  entity_id: !input countdown_timer_entity
+                                data:
+                                  duration: !input countdown_duration_day
+                            else:
+                              - action: timer.start
+                                metadata: {}
+                                target:
+                                  entity_id: !input countdown_timer_entity
+                                data:
+                                  duration: !input countdown_duration_night
                       - delay: 2
 
           - conditions:
@@ -651,8 +715,8 @@ action:
                 metadata: {}
                 target:
                   entity_id:
-                    - !input helper_paused
-                    - !input helper_active
+                    - !input paused_status_entity
+                    - !input active_status_entity
                 data: {}
               - if:
                   - condition: template
@@ -672,8 +736,8 @@ action:
                 metadata: {}
                 target:
                   entity_id:
-                    - !input helper_paused
-                    - !input helper_active
+                    - !input paused_status_entity
+                    - !input active_status_entity
                 data: {}
               - action: scene.turn_on
                 metadata: {}
@@ -703,8 +767,8 @@ action:
                 metadata: {}
                 target:
                   entity_id:
-                    - !input helper_paused
-                    - !input helper_active
+                    - !input paused_status_entity
+                    - !input active_status_entity
                 data: {}
               - if:
                   - condition: template
@@ -730,10 +794,10 @@ action:
               - condition: trigger
                 id: Time Day Start
               - condition: state
-                entity_id: !input helper_active
+                entity_id: !input active_status_entity
                 state: "on"
               - condition: state
-                entity_id: !input helper_paused
+                entity_id: !input paused_status_entity
                 state: "off"
             sequence:
               - action: scene.turn_on
@@ -747,10 +811,10 @@ action:
               - condition: trigger
                 id: Time Night Start
               - condition: state
-                entity_id: !input helper_active
+                entity_id: !input active_status_entity
                 state: "on"
               - condition: state
-                entity_id: !input helper_paused
+                entity_id: !input paused_status_entity
                 state: "off"
             sequence:
               - action: scene.turn_on
@@ -759,15 +823,3 @@ action:
                   entity_id: !input night_scene
                 data: {}
               - delay: 2
-
-variables:
-  delay_day: !input delay_day
-  delay_night: !input delay_night
-  restricted_hours_enabled: !input restricted_hours_enabled
-  off_at_restriction_end: !input off_at_restriction_end
-  low_lux_enabled: !input low_lux_enabled
-  illuminance_sensor: !input illuminance_sensor
-  illuminance_threshold: !input illuminance_threshold
-  additional_input_entity: !input additional_input_entity
-  active_scene: !input active_scene
-  inactive_scene: !input inactive_scene
