@@ -71,15 +71,16 @@ blueprint:
           because the automation remains active when this happens
         - Scenes are switched between at their respective times of day if the
           automation is active
-      - Countdown Timer
+      - Countdown Timer (Optional)
         - Lights turning off (and automation becoming inactive) are triggered by
           the room becoming unoccupied
-          However, the lights do not immediately go out when occupancy clears
-        - Instead, a timer is started
+        - However, with this option enabled the lights do not immediately go
+          out when occupancy clears
+        - Instead, a countdown timer is started
         - When the timer reaches zero, the lights are turned off, and the
           automation becomes inactive
         - If occupancy recurs before the countdown completes, then the countdown
-          is terminated
+          is terminated, and the automation stays active
         - You can set different timer durations during day and night hours
         - The timer is designed to smooth out short periods of no occupancy
           being detected. Perhaps your room gets regular footfall and you don't
@@ -87,7 +88,7 @@ blueprint:
           occupancy sensor can be a little poor at detecting people who are
           sitting down for a while...
         - You must create your timer helper outside of the automation
-      - Restrict Hours
+      - Restrict Hours (Optional)
         - You can optionally enable config to restrict the hours between which
           the automation can activate
         - The hours you specify can be across two days if needed
@@ -95,7 +96,7 @@ blueprint:
           beecome inactive, but the lights will stay on
         - You can optionally choose for the lights to turn off at the end of the
           limited time block
-      - Restrict to Low Lux
+      - Restrict to Low Lux (Optional)
         - You can optionally enable config to restrict the activation of the
           automation to times when the lux level in the room is below a
           given value
@@ -406,6 +407,9 @@ variables:
   inactive_scene: !input inactive_scene
   countdown_timer_enabled: !input countdown_timer_enabled
 
+trigger_variables:
+  countdown_timer_entity: !input countdown_timer_entity
+
 trigger:
   - platform: state
     entity_id: !input occupancy_sensor_entity
@@ -424,10 +428,8 @@ trigger:
     for:
       minutes: 15
     id: Occupancy Cleared 15m
-  - platform: state
-    entity_id: !input countdown_timer_entity
-    from: active
-    to: idle
+  - platform: template
+    value_template: "{{ is_state(countdown_timer_entity, 'idle') }}"
     id: Timer Completed
   - platform: time
     at: !input restricted_hours_until
@@ -517,10 +519,9 @@ action:
                         data: {}
                   - delay: 2
               - if:
-                  - condition: state
-                    entity_id: !input countdown_timer_entity
-                    state:
-                      - active
+                  - condition: template
+                    value_template: >
+                      {{ is_state(countdown_timer_entity, 'active') }}
                 then:
                   - action: timer.pause
                     metadata: {}
@@ -681,13 +682,24 @@ action:
                             state:
                               - "off"
                         then:
-                          - action: timer.start
-                            metadata: {}
-                            target:
-                              entity_id: !input countdown_timer_entity
-                            data:
-                              duration: >-
-                                00:{{ countdown_duration_day }}:00
+                          - if:
+                              - condition: time
+                                after: !input time_day_start
+                                before: !input time_night_start
+                            then:
+                              - action: timer.start
+                                metadata: {}
+                                target:
+                                  entity_id: !input countdown_timer_entity
+                                data:
+                                  duration: !input countdown_duration_day
+                            else:
+                              - action: timer.start
+                                metadata: {}
+                                target:
+                                  entity_id: !input countdown_timer_entity
+                                data:
+                                  duration: !input countdown_duration_night
                       - delay: 2
 
           - conditions:
