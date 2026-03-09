@@ -419,6 +419,28 @@ blueprint:
           default: '09:00:00'
           selector:
             time: {}
+        dusk_elevation:
+          name: Dusk Elevation
+          description: >
+            Fine tune when dusk triggers based on Sun elevation
+          default: 0
+          selector:
+            number:
+              min: -6
+              max: 3
+              step: 0.5
+              mode: slider
+        dawn_elevation:
+          name: Dawn Elevation
+          description: >
+            Fine tune when dawn triggers based on Sun elevation
+          default: 0
+          selector:
+            number:
+              min: -6
+              max: 3
+              step: 0.5
+              mode: slider
         off_at_restriction_end:
           name: Turn Off?
           description: >
@@ -590,7 +612,7 @@ action:
                                               - condition: numeric_state
                                                 entity_id: sun.sun
                                                 attribute: elevation
-                                                below: -3
+                                                below: !input dusk_elevation
                                           - condition: and
                                             conditions:
                                               - condition: state
@@ -600,7 +622,7 @@ action:
                                               - condition: numeric_state
                                                 entity_id: sun.sun
                                                 attribute: elevation
-                                                below: -4
+                                                below: !input dawn_elevation
                       # Process low lux options
                       - condition: or
                         conditions:
