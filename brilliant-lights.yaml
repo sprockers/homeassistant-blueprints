@@ -16,26 +16,32 @@ blueprint:
     <details>
 
 
-    - **Inputs:**
+    - **Input Entities:**
       - Occupancy/motion `binary_sensor` entity or group helper
+        - This is the primary trigger for turning your lights on and off
         - The automation activates when occupancy is detected
         - The automation stays active until occupancy clears
-        - Other settings refine the above basic operating states
+        - Time and lux level restrictions can be applied to the
+          occupancy trigger, limiting when the automation activates
       - Light-related `switch` or `light` entity or group helper
         - Turning on or off a physical smart switch or a light entity in
           the UI acts as a trigger for the automation
         - If the automation was inactive, then it is activated
         - If the automation was already active, then it is paused
+        - The automation will stay active until occupancy clears,
+          meaning the lights will turn off automatically
+        - This trigger works regardless of any time or low lux restrictions
+          ensuring that you can always turn on and off you lights
         - See Key Concepts below for definitions of active and paused states
       - An optional `binary_sensor` or `input_boolean` entity or group helper
-        - The automation will not activate if this input is `false`/`off`
+        - The automation will only activate if this input is `true`/`on`
 
 
     - **Key Concepts:**
       - Active State
         - Automation activates when triggers cause the lights to turn on
-        - Automation remains active until occupancy is clear and the
-          timer has counted down to zero
+        - Automation remains active until occupancy is clear and (optionally)
+          the timer has counted down to zero
         - Active state is stored in an `input_boolean` helper
         - You must define this helper outside of the automation
         - Whilst the automation remains active for some time, the automation
@@ -43,10 +49,10 @@ blueprint:
           actions, completing the automation run each time
       - Pause State
         - The automation is paused if you turn off the lights using the light
-          switch whilst the automation is in active state
+          switch or light entity in the UI whilst the automation is active
         - This is a convenience to ensure that the lights stay off until
           the automation becomes inactive, or until you turn the lights back on
-          using the light switch
+          using the switch or light entity in the UI
         - The automation remains active whilst in pause state, with the usual
           rules in place regarding when the automation becomes inactive
         - Pause state is stored in an `input_boolean` helper
@@ -90,16 +96,18 @@ blueprint:
         - You must create your timer helper outside of the automation
       - Restrict Hours (Optional)
         - You can optionally enable config to restrict the hours between which
-          the automation can activate
+          the automation can activate via the occupancy trigger
+        - You can choose between a specific set of hours, or dusk until dawn
         - The hours you specify can be across two days if needed
-        - By default at the end of the limited time block the automation will
+        - The dusk until dawn setting changes with the seasons
+        - By default at the end of the restricted time block the automation will
           beecome inactive, but the lights will stay on
         - You can optionally choose for the lights to turn off at the end of the
           limited time block
       - Restrict to Low Lux (Optional)
         - You can optionally enable config to restrict the activation of the
-          automation to times when the lux level in the room is below a
-          given value
+          automation from occupancy to times when the lux level in the room is
+          below a given value
         - This convenient function allows you to ensure that your lights only
           come on during daylight if for some reason the room is unusually dark
     </details>
@@ -319,11 +327,13 @@ blueprint:
             duration:
               enable_day: false
     restricted_hours:
-      name: Restrict Hours
+      name: Restrict to Specified Hours
       description: >
         Only want your lights to come on between specific hours?<br>
         Enable this section, specify the type of time restrictions
         you'd like. Fill in the specific hours if you choose this option.<br>
+        **This restriction only applies when the automation is triggered
+        by occupancy.**<br>
         _Note: the hours can straddle two days if needed._
       icon: mdi:clock-check
       collapsed: true
@@ -374,7 +384,9 @@ blueprint:
       description: >
         Don't want your lights to come on when it is bright daylight?<br>
         Enable this section to restrict automation activation to times when
-        the lux levels in the room are below a given threshold.
+        the lux levels in the room are below a given threshold.<br>
+        **This restriction only applies when the automation is triggered
+        by occupancy.**<br>
       icon: mdi:brightness-4
       collapsed: true
       input:
@@ -523,7 +535,7 @@ action:
                                               - condition: numeric_state
                                                 entity_id: sun.sun
                                                 attribute: elevation
-                                                below: -1.5
+                                                below: -3
                                           - condition: and
                                             conditions:
                                               - condition: state
