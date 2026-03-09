@@ -6,7 +6,7 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.6*<p>
+    *Version: 0.9.7*<p>
 
 
     A stateful lighting scene controller which triggers
@@ -322,8 +322,8 @@ blueprint:
       name: Restrict Hours
       description: >
         Only want your lights to come on between specific hours?<br>
-        Enable this section and specify the time range you'd like the
-        automation to be active.<br>
+        Enable this section, specify the type of time restrictions
+        you'd like. Fill in the specific hours if you choose this option.<br>
         _Note: the hours can straddle two days if needed._
       icon: mdi:clock-check
       collapsed: true
@@ -333,15 +333,28 @@ blueprint:
           default: false
           selector:
             boolean: {}
+        restricted_hours_type:
+          name: Restriction Type
+          default: "specific_time"
+          selector:
+            select:
+              options:
+                - label: Specific Time
+                  value: specific_time
+                - label: Dusk Until Dawn
+                  value: dusk_until_dawn
+              mode: list
         restricted_hours_from:
-          name: Enabled From
-          description: Time from which the automation is active
+          name: Specific Time From
+          description: >
+            Time from which the automation is active<br>
           default: '16:00:00'
           selector:
             time: {}
         restricted_hours_until:
-          name: Enabled Until
-          description: Time until which the automation is active
+          name: Specific Time Until
+          description: >
+            Time until which the automation is active<br>
           default: '09:00:00'
           selector:
             time: {}
@@ -351,7 +364,8 @@ blueprint:
             By default, when the end of the restricted hours is reached
             the automation will become inactive, but the lights will remain
             on.<br>
-            Enabling this toggle will turn the lights off instead.
+            Enabling this toggle will turn the lights off instead.<br>
+            Works with both specific hours and dusk until dawn options.
           default: false
           selector:
             boolean: {}
@@ -398,6 +412,7 @@ mode: single
 
 variables:
   restricted_hours_enabled: !input restricted_hours_enabled
+  restricted_hours_type: !input restricted_hours_type
   off_at_restriction_end: !input off_at_restriction_end
   low_lux_enabled: !input low_lux_enabled
   illuminance_sensor_entity: !input illuminance_sensor_entity
@@ -461,23 +476,73 @@ action:
                 state: 'off'
             sequence:
               - if:
+                  # Only proceed if restricted hours and low lux sections
+                  # eval true
                   - condition: and
                     conditions:
+                      # Process restricted hours options
                       - condition: or
                         conditions:
+                          # Restricted hours not enabled
                           - condition: template
                             value_template: "{{ not restricted_hours_enabled }}"
+                          # Restricted hours enabled
+                          # One set of time constraints must eval to true to
+                          # allow automation to activate
                           - condition: and
                             conditions:
                               - condition: template
                                 value_template: "{{ restricted_hours_enabled }}"
-                              - condition: time
-                                after: !input restricted_hours_from
-                                before: !input restricted_hours_until
+                              - condition: or
+                                conditions:
+                                  # between specific times
+                                  - condition: and
+                                    conditions:
+                                      - condition: template
+                                        value_template: >
+                                          {{ restricted_hours_type ==
+                                          'specific_time' }}
+                                      - condition: time
+                                        before: !input restricted_hours_until
+                                        after: !input restricted_hours_from
+                                  # from dusk until dawn
+                                  - condition: and
+                                    conditions:
+                                      - condition: template
+                                        value_template: >
+                                          {{ restricted_hours_type ==
+                                          'dusk_until_dawn' }}
+                                      - condition: or
+                                        conditions:
+                                          - condition: and
+                                            conditions:
+                                              - condition: state
+                                                entity_id: sun.sun
+                                                attribute: rising
+                                                state: false
+                                              - condition: numeric_state
+                                                entity_id: sun.sun
+                                                attribute: elevation
+                                                below: -1.5
+                                          - condition: and
+                                            conditions:
+                                              - condition: state
+                                                entity_id: sun.sun
+                                                attribute: rising
+                                                state: true
+                                              - condition: numeric_state
+                                                entity_id: sun.sun
+                                                attribute: elevation
+                                                below: -4
+                      # Process low lux options
                       - condition: or
                         conditions:
+                          # Low lux not enabled
                           - condition: template
                             value_template: "{{ not low_lux_enabled }}"
+                          # Low lux enabled
+                          # lux must be below threshold for automation to
+                          # activate
                           - condition: and
                             conditions:
                               - condition: template
