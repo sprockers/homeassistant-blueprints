@@ -6,7 +6,7 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.6*<p>
+    *Version: 0.9.7*<p>
 
 
     A stateful lighting scene controller which triggers
@@ -16,26 +16,32 @@ blueprint:
     <details>
 
 
-    - **Inputs:**
+    - **Input Entities:**
       - Occupancy/motion `binary_sensor` entity or group helper
+        - This is the primary trigger for turning your lights on and off
         - The automation activates when occupancy is detected
         - The automation stays active until occupancy clears
-        - Other settings refine the above basic operating states
+        - Time and lux level restrictions can be applied to the
+          occupancy trigger, limiting when the automation activates
       - Light-related `switch` or `light` entity or group helper
         - Turning on or off a physical smart switch or a light entity in
           the UI acts as a trigger for the automation
         - If the automation was inactive, then it is activated
         - If the automation was already active, then it is paused
+        - The automation will stay active until occupancy clears,
+          meaning the lights will turn off automatically
+        - This trigger works regardless of any time or low lux restrictions
+          ensuring that you can always turn on and off you lights
         - See Key Concepts below for definitions of active and paused states
       - An optional `binary_sensor` or `input_boolean` entity or group helper
-        - The automation will not activate if this input is `false`/`off`
+        - The automation will only activate if this input is `true`/`on`
 
 
     - **Key Concepts:**
       - Active State
         - Automation activates when triggers cause the lights to turn on
-        - Automation remains active until occupancy is clear and the
-          timer has counted down to zero
+        - Automation remains active until occupancy is clear and (optionally)
+          the timer has counted down to zero
         - Active state is stored in an `input_boolean` helper
         - You must define this helper outside of the automation
         - Whilst the automation remains active for some time, the automation
@@ -43,10 +49,10 @@ blueprint:
           actions, completing the automation run each time
       - Pause State
         - The automation is paused if you turn off the lights using the light
-          switch whilst the automation is in active state
+          switch or light entity in the UI whilst the automation is active
         - This is a convenience to ensure that the lights stay off until
           the automation becomes inactive, or until you turn the lights back on
-          using the light switch
+          using the switch or light entity in the UI
         - The automation remains active whilst in pause state, with the usual
           rules in place regarding when the automation becomes inactive
         - Pause state is stored in an `input_boolean` helper
@@ -90,16 +96,18 @@ blueprint:
         - You must create your timer helper outside of the automation
       - Restrict Hours (Optional)
         - You can optionally enable config to restrict the hours between which
-          the automation can activate
+          the automation can activate via the occupancy trigger
+        - You can choose between a specific set of hours, or dusk until dawn
         - The hours you specify can be across two days if needed
-        - By default at the end of the limited time block the automation will
-          beecome inactive, but the lights will stay on
+        - The dusk until dawn setting changes with the seasons
+        - By default at the end of the restricted time block the automation will
+          become inactive, but the lights will stay on
         - You can optionally choose for the lights to turn off at the end of the
           limited time block
       - Restrict to Low Lux (Optional)
         - You can optionally enable config to restrict the activation of the
-          automation to times when the lux level in the room is below a
-          given value
+          automation from occupancy to times when the lux level in the room is
+          below a given value
         - This convenient function allows you to ensure that your lights only
           come on during daylight if for some reason the room is unusually dark
     </details>
@@ -191,31 +199,24 @@ blueprint:
               multiple: false
               reorder: false
     scenes_and_times:
-      name: Scenes And Times of Day to Use them
+      name: Scenes And Times of Day to Use Them (Required)
       description: >
         Light settings are configured using `scene` objects.<br>
         We need scenes that control the light settings both when
         the lights are `on` and `off`. In additon, we split the `on`
         state into day time and night time with associated times when
         these scenes are active.<br>
-        Note that you can use the same scene for both day time and
-        night time if you wish.<br>
-        We also have optional scenes to run when the automation
-        becomes active or inactive. Note these are subtly different
-        from `on` and `off` - for instance the automation remains active
-        when the lights are in the paused state. If you don't need these
-        optional scenes, just leave them blank.
       icon: mdi:palette
       collapsed: true
       input:
         time_day_start:
-          name: Day Scene Start Time
+          name: Day Scene Start Time (Required)
           description: Time when "Day Scene" becomes active.
           default: '07:00:00'
           selector:
             time: {}
         day_scene:
-          name: Day Scene
+          name: Day Scene (Required)
           description: Holds the light combinations to use during day time hours
           selector:
             entity:
@@ -224,15 +225,17 @@ blueprint:
               multiple: false
               reorder: false
         time_night_start:
-          name: Night Scene Start Time
+          name: Night Scene Start Time (Required)
           description: Time when "Night Scene" becomes active.
           default: '22:00:00'
           selector:
             time: {}
         night_scene:
-          name: Night Scene
+          name: Night Scene (Required)
           description: >
-            Holds the light combinations to use during night time hours
+            Holds the light combinations to use during night time hours<br>
+            _Note: if you wish to use the same scene settings 24 hours per day
+            simply use the same scene here as you used for Day Scene above_
           selector:
             entity:
               domain:
@@ -240,7 +243,7 @@ blueprint:
               multiple: false
               reorder: false
         off_scene:
-          name: Off Scene
+          name: Off Scene (Required)
           description: >
             Holds the light combinations to use when the lights should be
             turned off
@@ -250,10 +253,26 @@ blueprint:
                 - scene
               multiple: false
               reorder: false
+    optional_scenes:
+      name: Additional Scenes (Optional)
+      description: >
+        Beyond the required Day, Night and Off scene triggers, there are a
+        number of other trigger points in the automation that you may want
+        to leverage.<br>
+        For instance, imagine your occupancy sensor has a controllable LED.
+        When the automation actives, you could turn on the LED, and when it
+        becomes inactive, you could turn it off.<br>
+        This optional section provides you the ability to run scenes at each
+        of the useful state changes in the automation.<br>
+        Provide a scene for each of the trigger points you want to control,
+        and just leave the others blank.
+      icon: mdi:palette
+      collapsed: true
+      input:
         active_scene:
           name: Automation Active Scene (optional)
           description: >
-            Scene to run when the automation becomes active
+            Triggers when the automation becomes active
           default:
           selector:
             entity:
@@ -263,7 +282,47 @@ blueprint:
         inactive_scene:
           name: Automation Inactive Scene (optional)
           description: >
-            Scene to run when the automation becomes inactive
+            Triggers when the automation becomes inactive
+          default:
+          selector:
+            entity:
+              domain: scene
+              multiple: false
+              reorder: false
+        occupancy_detected_scene:
+          name: Occupancy Detected Scene (optional)
+          description: >
+            Triggers when occupancy is detected
+          default:
+          selector:
+            entity:
+              domain: scene
+              multiple: false
+              reorder: false
+        occupancy_cleared_scene:
+          name: Occupancy Cleared Scene (optional)
+          description: >
+            Triggers when occupancy clears
+          default:
+          selector:
+            entity:
+              domain: scene
+              multiple: false
+              reorder: false
+        pause_on_scene:
+          name: Automation Paused Scene (optional)
+          description: >
+            Triggers when the automation becomes paused
+          default:
+          selector:
+            entity:
+              domain: scene
+              multiple: false
+              reorder: false
+        pause_off_scene:
+          name: Automation Un-paused Scene (optional)
+          description: >
+            Triggers when the automation becomes un-paused
           default:
           selector:
             entity:
@@ -271,7 +330,7 @@ blueprint:
               multiple: false
               reorder: false
     countdown:
-      name: Countdown Timer And Durations
+      name: Countdown Timer And Durations (Optional)
       description: >
         Want to delay the lights switching off when occupancy clears?<br>
         Enable this optional section to start a countdown timer upon
@@ -319,12 +378,16 @@ blueprint:
             duration:
               enable_day: false
     restricted_hours:
-      name: Restrict Hours
+      name: Restrict to Specified Hours (Optional)
       description: >
         Only want your lights to come on between specific hours?<br>
-        Enable this section and specify the time range you'd like the
-        automation to be active.<br>
-        _Note: the hours can straddle two days if needed._
+        Enable this section, specify the type of time restrictions
+        you'd like. Fill in the specific hours or fine-tune dawn and dusk
+        times if you choose one of these options.<br>
+        **This restriction only applies when the automation is triggered
+        by occupancy.**<br>
+        _Note: The times you choose for specific hours can straddle two
+        days if needed._
       icon: mdi:clock-check
       collapsed: true
       input:
@@ -333,34 +396,72 @@ blueprint:
           default: false
           selector:
             boolean: {}
+        restricted_hours_type:
+          name: Restriction Type
+          default: "specific_time"
+          selector:
+            select:
+              options:
+                - label: Specific Time
+                  value: specific_time
+                - label: Dusk Until Dawn
+                  value: dusk_until_dawn
+              mode: list
         restricted_hours_from:
-          name: Enabled From
-          description: Time from which the automation is active
+          name: Specific Time From
+          description: >
+            Time from which the automation is active<br>
           default: '16:00:00'
           selector:
             time: {}
         restricted_hours_until:
-          name: Enabled Until
-          description: Time until which the automation is active
+          name: Specific Time Until
+          description: >
+            Time until which the automation is active<br>
           default: '09:00:00'
           selector:
             time: {}
+        dusk_time_offset:
+          name: Dusk Time Offset
+          description: >
+            Fine tune when dusk triggers based on an offset from sunset.<br>
+            e.g. `-00:30` triggers 30 minutes before sunset, `+00:30`
+            triggers 30 minutes after sunset
+          default: '-00:00'
+          selector:
+            duration:
+              allow_negative: true
+              enable_second: false
+        dawn_time_offset:
+          name: Dawn Time Offset
+          description: >
+            Fine tune when dawn triggers based on an offset from sunrise.<br>
+            e.g. `-01:00` triggers one hour before sunrise, `+01:00`
+            triggers 1 hour after sunrise
+          default: '00:00'
+          selector:
+            duration:
+              allow_negative: true
+              enable_second: false
         off_at_restriction_end:
           name: Turn Off?
           description: >
             By default, when the end of the restricted hours is reached
             the automation will become inactive, but the lights will remain
             on.<br>
-            Enabling this toggle will turn the lights off instead.
+            Enabling this toggle will turn the lights off instead.<br>
+            Works with both specific hours and dusk until dawn options.
           default: false
           selector:
             boolean: {}
     low_lux:
-      name: Restrict to Low Lux
+      name: Restrict to Low Lux (Optional)
       description: >
         Don't want your lights to come on when it is bright daylight?<br>
         Enable this section to restrict automation activation to times when
-        the lux levels in the room are below a given threshold.
+        the lux levels in the room are below a given threshold.<br>
+        **This restriction only applies when the automation is triggered
+        by occupancy.**<br>
       icon: mdi:brightness-4
       collapsed: true
       input:
@@ -398,6 +499,7 @@ mode: single
 
 variables:
   restricted_hours_enabled: !input restricted_hours_enabled
+  restricted_hours_type: !input restricted_hours_type
   off_at_restriction_end: !input off_at_restriction_end
   low_lux_enabled: !input low_lux_enabled
   illuminance_sensor_entity: !input illuminance_sensor_entity
@@ -405,12 +507,20 @@ variables:
   additional_input_entity: !input additional_input_entity
   active_scene: !input active_scene
   inactive_scene: !input inactive_scene
+  occupancy_detected_scene: !input occupancy_detected_scene
+  occupancy_cleared_scene: !input occupancy_cleared_scene
+  pause_on_scene: !input pause_on_scene
+  pause_off_scene: !input pause_off_scene
   countdown_timer_enabled: !input countdown_timer_enabled
 
 trigger_variables:
+  countdown_timer_enabled: !input countdown_timer_enabled
   countdown_timer_entity: !input countdown_timer_entity
+  active_status_entity: !input active_status_entity
+  occupancy_sensor_entity: !input occupancy_sensor_entity
 
 trigger:
+  # Primary triggers - occupancy/clear/switch toggle
   - platform: state
     entity_id: !input occupancy_sensor_entity
     to: 'on'
@@ -422,18 +532,46 @@ trigger:
   - platform: state
     entity_id: !input light_switch_entity
     id: Light Switch Toggle
+
+  # Extra catchall clean up
   - platform: state
     entity_id: !input occupancy_sensor_entity
     to: 'off'
     for:
       minutes: 15
     id: Occupancy Cleared 15m
+
+  # Timer completion
   - platform: template
     value_template: "{{ is_state(countdown_timer_entity, 'idle') }}"
     id: Timer Completed
+  - platform: template
+    value_template: >
+      {{ countdown_timer_enabled is false and
+      is_state(active_status_entity, "on") and
+      is_state(occupancy_sensor_entity, "off") }}
+    for: !input countdown_duration_day
+    id: Timer Completed
+
+  # Time Restrictions
+  # Turn on
+  - platform: time
+    at: !input restricted_hours_from
+    id: Occupancy
+  - platform: sun
+    event: sunset
+    offset: !input dusk_time_offset
+    id: Occupancy
+  # Turn off
   - platform: time
     at: !input restricted_hours_until
     id: End Restricted Hours
+  - platform: sun
+    event: sunrise
+    offset: !input dawn_time_offset
+    id: End Restricted Hours
+
+  # Change scenes
   - platform: time
     at: !input time_day_start
     id: Time Day Start
@@ -446,38 +584,78 @@ action:
       - condition: or
         conditions:
           - condition: template
-            value_template: "{{ additional_input_entity | length == 0 }}"
+            value_template: "{{ additional_input_entity is none }}"
           - condition: template
             value_template: >
-              {{ additional_input_entity | length > 0 and
-              is_state(additional_input_entity, 'on') }}
+              {{ is_state(additional_input_entity, 'on')
+              if additional_input_entity is not none
+              else false}}
     then:
       - choose:
           - conditions:
               - condition: trigger
                 id: Occupancy
               - condition: state
+                entity_id: !input occupancy_sensor_entity
+                state: 'on'
+              - condition: state
                 entity_id: !input paused_status_entity
                 state: 'off'
             sequence:
               - if:
+                  # Only proceed if restricted hours and low lux sections
+                  # are either not used or eval to true
                   - condition: and
                     conditions:
+                      # Process restricted hours options
                       - condition: or
                         conditions:
+                          # Restricted hours not enabled
                           - condition: template
                             value_template: "{{ not restricted_hours_enabled }}"
+                          # Restricted hours enabled
+                          # One set of time constraints must eval to true to
+                          # allow automation to activate
                           - condition: and
                             conditions:
                               - condition: template
                                 value_template: "{{ restricted_hours_enabled }}"
-                              - condition: time
-                                after: !input restricted_hours_from
-                                before: !input restricted_hours_until
+                              - condition: or
+                                conditions:
+                                  # between specific times
+                                  - condition: and
+                                    conditions:
+                                      - condition: template
+                                        value_template: >
+                                          {{ restricted_hours_type ==
+                                          'specific_time' }}
+                                      - condition: time
+                                        before: !input restricted_hours_until
+                                        after: !input restricted_hours_from
+                                  # from dusk until dawn
+                                  - condition: and
+                                    conditions:
+                                      - condition: template
+                                        value_template: >
+                                          {{ restricted_hours_type ==
+                                          'dusk_until_dawn' }}
+                                      - condition: or
+                                        conditions:
+                                          - condition: sun
+                                            after: sunset
+                                            after_offset: !input dusk_time_offset
+                                          - condition: sun
+                                            before: sunrise
+                                            before_offset: !input dawn_time_offset
+                      # Process low lux options
                       - condition: or
                         conditions:
+                          # Low lux not enabled
                           - condition: template
                             value_template: "{{ not low_lux_enabled }}"
+                          # Low lux enabled
+                          # lux must be below threshold for automation to
+                          # activate
                           - condition: and
                             conditions:
                               - condition: template
@@ -485,7 +663,9 @@ action:
                               - condition: template
                                 value_template: >
                                   {{ states(illuminance_sensor_entity)|float <
-                                  illuminance_threshold|float }}
+                                  illuminance_threshold|float
+                                  if illuminance_sensor_entity is not none
+                                  else false }}
                 then:
                   - if:
                       - condition: time
@@ -510,24 +690,41 @@ action:
                     data: {}
                   - if:
                       - condition: template
-                        value_template: "{{ active_scene | length > 0 }}"
+                        value_template: "{{ active_scene is not none }}"
                     then:
                       - action: scene.turn_on
                         metadata: {}
                         target:
                           entity_id: !input active_scene
                         data: {}
+                  - if:
+                      - condition: template
+                        value_template: >
+                          {{ occupancy_detected_scene is not none }}
+                    then:
+                      - action: scene.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input occupancy_detected_scene
+                        data: {}
                   - delay: 2
               - if:
+                  # Occupancy, with timer running
                   - condition: template
-                    value_template: >
-                      {{ is_state(countdown_timer_entity, 'active') }}
+                    value_template: "{{ countdown_timer_enabled }}"
                 then:
-                  - action: timer.pause
-                    metadata: {}
-                    target:
-                      entity_id: !input countdown_timer_entity
-                    data: {}
+                  - if:
+                      - condition: template
+                        value_template: >
+                          {{ is_state(countdown_timer_entity, 'active')
+                          if countdown_timer_entity is not none
+                          else false}}
+                    then:
+                      - action: timer.pause
+                        metadata: {}
+                        target:
+                          entity_id: !input countdown_timer_entity
+                        data: {}
 
           - conditions:
               - condition: trigger
@@ -563,6 +760,16 @@ action:
                           entity_id: !input countdown_timer_entity
                         data:
                           duration: !input countdown_duration_night
+                  - if:
+                      - condition: template
+                        value_template: >
+                          {{ occupancy_cleared_scene is not none }}
+                    then:
+                      - action: scene.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input occupancy_cleared_scene
+                        data: {}
                 else:
                   - action: input_boolean.turn_off
                     metadata: {}
@@ -578,7 +785,7 @@ action:
                     data: {}
                   - if:
                       - condition: template
-                        value_template: "{{ inactive_scene | length > 0 }}"
+                        value_template: "{{ inactive_scene is not none }}"
                     then:
                       - action: scene.turn_on
                         metadata: {}
@@ -593,6 +800,7 @@ action:
             sequence:
               - choose:
                   - conditions:
+                      # active on, pause off
                       - condition: state
                         entity_id: !input active_status_entity
                         state: "on"
@@ -610,8 +818,18 @@ action:
                         target:
                           entity_id: !input off_scene
                         data: {}
+                      - if:
+                          - condition: template
+                            value_template: "{{ pause_on_scene is not none }}"
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input pause_on_scene
+                            data: {}
                       - delay: 2
                   - conditions:
+                      # active on, pause on
                       - condition: state
                         entity_id: !input active_status_entity
                         state: "on"
@@ -640,66 +858,91 @@ action:
                             target:
                               entity_id: !input night_scene
                             data: {}
+                      - if:
+                          - condition: template
+                            value_template: "{{ pause_off_scene is not none }}"
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input pause_off_scene
+                            data: {}
                       - delay: 2
                   - conditions:
+                      # active off
                       - condition: state
                         entity_id: !input active_status_entity
                         state: "off"
                     sequence:
-                      - action: input_boolean.turn_on
-                        metadata: {}
-                        target:
-                          entity_id: !input active_status_entity
-                        data: {}
-                      - if:
-                          - condition: time
-                            after: !input time_day_start
-                            before: !input time_night_start
-                        then:
-                          - action: scene.turn_on
-                            metadata: {}
-                            target:
-                              entity_id: !input day_scene
-                            data: {}
-                        else:
-                          - action: scene.turn_on
-                            metadata: {}
-                            target:
-                              entity_id: !input night_scene
-                            data: {}
-                      - if:
-                          - condition: template
-                            value_template: "{{ active_scene | length > 0 }}"
-                        then:
-                          - action: scene.turn_on
-                            metadata: {}
-                            target:
-                              entity_id: !input active_scene
-                            data: {}
                       - if:
                           - condition: state
-                            entity_id: !input occupancy_sensor_entity
-                            state:
-                              - "off"
+                            entity_id: !input light_switch_entity
+                            state: "off"
+                            for:
+                              seconds: 2
                         then:
+                          - action: input_boolean.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input active_status_entity
+                            data: {}
                           - if:
                               - condition: time
                                 after: !input time_day_start
                                 before: !input time_night_start
                             then:
-                              - action: timer.start
+                              - action: scene.turn_on
                                 metadata: {}
                                 target:
-                                  entity_id: !input countdown_timer_entity
-                                data:
-                                  duration: !input countdown_duration_day
+                                  entity_id: !input day_scene
+                                data: {}
                             else:
-                              - action: timer.start
+                              - action: scene.turn_on
                                 metadata: {}
                                 target:
-                                  entity_id: !input countdown_timer_entity
-                                data:
-                                  duration: !input countdown_duration_night
+                                  entity_id: !input night_scene
+                                data: {}
+                          - if:
+                              - condition: template
+                                value_template: "{{ active_scene is not none }}"
+                            then:
+                              - action: scene.turn_on
+                                metadata: {}
+                                target:
+                                  entity_id: !input active_scene
+                                data: {}
+                          - if:
+                              # No occupancy when switch turned on
+                              - condition: state
+                                entity_id: !input occupancy_sensor_entity
+                                state:
+                                  - "off"
+                            then:
+                              - if:
+                                  # Use countdown timer if available
+                                  # If not, will use a trigger
+                                  - condition: template
+                                    value_template: >
+                                      {{ countdown_timer_enabled }}
+                                then:
+                                  - if:
+                                      - condition: time
+                                        after: !input time_day_start
+                                        before: !input time_night_start
+                                    then:
+                                      - action: timer.start
+                                        metadata: {}
+                                        target:
+                                          entity_id: !input countdown_timer_entity
+                                        data:
+                                          duration: !input countdown_duration_day
+                                    else:
+                                      - action: timer.start
+                                        metadata: {}
+                                        target:
+                                          entity_id: !input countdown_timer_entity
+                                        data:
+                                          duration: !input countdown_duration_night
                       - delay: 2
 
           - conditions:
@@ -720,7 +963,7 @@ action:
                 data: {}
               - if:
                   - condition: template
-                    value_template: "{{ inactive_scene | length > 0 }}"
+                    value_template: "{{ inactive_scene is not none }}"
                 then:
                   - action: scene.turn_on
                     metadata: {}
@@ -746,7 +989,7 @@ action:
                 data: {}
               - if:
                   - condition: template
-                    value_template: "{{ inactive_scene | length > 0 }}"
+                    value_template: "{{ inactive_scene is not none }}"
                 then:
                   - action: scene.turn_on
                     metadata: {}
@@ -781,7 +1024,7 @@ action:
                     data: {}
               - if:
                   - condition: template
-                    value_template: "{{ inactive_scene | length > 0 }}"
+                    value_template: "{{ inactive_scene is not none }}"
                 then:
                   - action: scene.turn_on
                     metadata: {}
