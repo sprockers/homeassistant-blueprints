@@ -554,12 +554,24 @@ trigger:
     id: Timer Completed
 
   # Time Restrictions
+  # Turn on
   - platform: time
     at: !input restricted_hours_from
     id: Occupancy
+  - platform: sun
+    event: sunset
+    offset: !input dusk_time_offset
+    id: Occupancy
+  # Turn off
   - platform: time
     at: !input restricted_hours_until
     id: End Restricted Hours
+  - platform: sun
+    event: sunrise
+    offset: !input dawn_time_offset
+    id: End Restricted Hours
+
+  # Change scenes
   - platform: time
     at: !input time_day_start
     id: Time Day Start
