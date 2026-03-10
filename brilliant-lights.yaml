@@ -520,7 +520,10 @@ variables:
   countdown_timer_enabled: !input countdown_timer_enabled
 
 trigger_variables:
+  countdown_timer_enabled: !input countdown_timer_enabled
   countdown_timer_entity: !input countdown_timer_entity
+  active_status_entity: !input active_status_entity
+  occupancy_sensor_entity: !input occupancy_sensor_entity
 
 trigger:
   - platform: state
@@ -552,17 +555,25 @@ trigger:
   - platform: time
     at: !input time_night_start
     id: Time Night Start
+  - platform: template
+    value_template: >
+      {{ countdown_timer_enabled is false and
+      is_state(active_status_entity, "on") and
+      is_state(occupancy_sensor_entity, "off") }}
+    for: !input countdown_duration_day
+    id: Timer Completed
 
 action:
   - if:
       - condition: or
         conditions:
           - condition: template
-            value_template: "{{ additional_input_entity | length == 0 }}"
+            value_template: "{{ additional_input_entity is none }}"
           - condition: template
             value_template: >
-              {{ additional_input_entity | length > 0 and
-              is_state(additional_input_entity, 'on') }}
+              {{ is_state(additional_input_entity, 'on')
+              if additional_input_entity is not none
+              else false}}
     then:
       - choose:
           - conditions:
@@ -574,7 +585,7 @@ action:
             sequence:
               - if:
                   # Only proceed if restricted hours and low lux sections
-                  # eval true
+                  # are either not used or eval to true
                   - condition: and
                     conditions:
                       # Process restricted hours options
@@ -647,7 +658,9 @@ action:
                               - condition: template
                                 value_template: >
                                   {{ states(illuminance_sensor_entity)|float <
-                                  illuminance_threshold|float }}
+                                  illuminance_threshold|float
+                                  if illuminance_sensor_entity is not none
+                                  else false }}
                 then:
                   - if:
                       - condition: time
@@ -672,7 +685,7 @@ action:
                     data: {}
                   - if:
                       - condition: template
-                        value_template: "{{ active_scene | length > 0 }}"
+                        value_template: "{{ active_scene is not none }}"
                     then:
                       - action: scene.turn_on
                         metadata: {}
@@ -681,7 +694,8 @@ action:
                         data: {}
                   - if:
                       - condition: template
-                        value_template: "{{ occupancy_detected_scene | length > 0 }}"
+                        value_template: >
+                          {{ occupancy_detected_scene is not none }}
                     then:
                       - action: scene.turn_on
                         metadata: {}
@@ -690,15 +704,22 @@ action:
                         data: {}
                   - delay: 2
               - if:
+                  # Occupancy, with timer running
                   - condition: template
-                    value_template: >
-                      {{ is_state(countdown_timer_entity, 'active') }}
+                    value_template: "{{ countdown_timer_enabled }}"
                 then:
-                  - action: timer.pause
-                    metadata: {}
-                    target:
-                      entity_id: !input countdown_timer_entity
-                    data: {}
+                  - if:
+                      - condition: template
+                        value_template: >
+                          {{ is_state(countdown_timer_entity, 'active')
+                          if countdown_timer_entity is not none
+                          else false}}
+                    then:
+                      - action: timer.pause
+                        metadata: {}
+                        target:
+                          entity_id: !input countdown_timer_entity
+                        data: {}
 
           - conditions:
               - condition: trigger
@@ -736,7 +757,8 @@ action:
                           duration: !input countdown_duration_night
                   - if:
                       - condition: template
-                        value_template: "{{ occupancy_cleared_scene | length > 0 }}"
+                        value_template: >
+                          {{ occupancy_cleared_scene is not none }}
                     then:
                       - action: scene.turn_on
                         metadata: {}
@@ -758,7 +780,7 @@ action:
                     data: {}
                   - if:
                       - condition: template
-                        value_template: "{{ inactive_scene | length > 0 }}"
+                        value_template: "{{ inactive_scene is not none }}"
                     then:
                       - action: scene.turn_on
                         metadata: {}
@@ -773,6 +795,7 @@ action:
             sequence:
               - choose:
                   - conditions:
+                      # active on, pause off
                       - condition: state
                         entity_id: !input active_status_entity
                         state: "on"
@@ -792,7 +815,7 @@ action:
                         data: {}
                       - if:
                           - condition: template
-                            value_template: "{{ pause_on_scene | length > 0 }}"
+                            value_template: "{{ pause_on_scene is not none }}"
                         then:
                           - action: scene.turn_on
                             metadata: {}
@@ -801,6 +824,7 @@ action:
                             data: {}
                       - delay: 2
                   - conditions:
+                      # active on, pause on
                       - condition: state
                         entity_id: !input active_status_entity
                         state: "on"
@@ -831,7 +855,7 @@ action:
                             data: {}
                       - if:
                           - condition: template
-                            value_template: "{{ pause_off_scene | length > 0 }}"
+                            value_template: "{{ pause_off_scene is not none }}"
                         then:
                           - action: scene.turn_on
                             metadata: {}
@@ -840,6 +864,7 @@ action:
                             data: {}
                       - delay: 2
                   - conditions:
+                      # active off
                       - condition: state
                         entity_id: !input active_status_entity
                         state: "off"
@@ -867,7 +892,7 @@ action:
                             data: {}
                       - if:
                           - condition: template
-                            value_template: "{{ active_scene | length > 0 }}"
+                            value_template: "{{ active_scene is not none }}"
                         then:
                           - action: scene.turn_on
                             metadata: {}
@@ -875,29 +900,36 @@ action:
                               entity_id: !input active_scene
                             data: {}
                       - if:
+                          # No occupancy when switch turned on
                           - condition: state
                             entity_id: !input occupancy_sensor_entity
                             state:
                               - "off"
                         then:
                           - if:
-                              - condition: time
-                                after: !input time_day_start
-                                before: !input time_night_start
+                              # Use countdown timer if available
+                              # If not, will use a trigger
+                              - condition: template
+                                value_template: "{{ countdown_timer_enabled }}"
                             then:
-                              - action: timer.start
-                                metadata: {}
-                                target:
-                                  entity_id: !input countdown_timer_entity
-                                data:
-                                  duration: !input countdown_duration_day
-                            else:
-                              - action: timer.start
-                                metadata: {}
-                                target:
-                                  entity_id: !input countdown_timer_entity
-                                data:
-                                  duration: !input countdown_duration_night
+                              - if:
+                                  - condition: time
+                                    after: !input time_day_start
+                                    before: !input time_night_start
+                                then:
+                                  - action: timer.start
+                                    metadata: {}
+                                    target:
+                                      entity_id: !input countdown_timer_entity
+                                    data:
+                                      duration: !input countdown_duration_day
+                                else:
+                                  - action: timer.start
+                                    metadata: {}
+                                    target:
+                                      entity_id: !input countdown_timer_entity
+                                    data:
+                                      duration: !input countdown_duration_night
                       - delay: 2
 
           - conditions:
@@ -918,7 +950,7 @@ action:
                 data: {}
               - if:
                   - condition: template
-                    value_template: "{{ inactive_scene | length > 0 }}"
+                    value_template: "{{ inactive_scene is not none }}"
                 then:
                   - action: scene.turn_on
                     metadata: {}
@@ -944,7 +976,7 @@ action:
                 data: {}
               - if:
                   - condition: template
-                    value_template: "{{ inactive_scene | length > 0 }}"
+                    value_template: "{{ inactive_scene is not none }}"
                 then:
                   - action: scene.turn_on
                     metadata: {}
@@ -979,7 +1011,7 @@ action:
                     data: {}
               - if:
                   - condition: template
-                    value_template: "{{ inactive_scene | length > 0 }}"
+                    value_template: "{{ inactive_scene is not none }}"
                 then:
                   - action: scene.turn_on
                     metadata: {}
