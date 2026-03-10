@@ -101,7 +101,7 @@ blueprint:
         - The hours you specify can be across two days if needed
         - The dusk until dawn setting changes with the seasons
         - By default at the end of the restricted time block the automation will
-          beecome inactive, but the lights will stay on
+          become inactive, but the lights will stay on
         - You can optionally choose for the lights to turn off at the end of the
           limited time block
       - Restrict to Low Lux (Optional)
@@ -199,7 +199,7 @@ blueprint:
               multiple: false
               reorder: false
     scenes_and_times:
-      name: Scenes And Times of Day to Use Then (Required)
+      name: Scenes And Times of Day to Use Them (Required)
       description: >
         Light settings are configured using `scene` objects.<br>
         We need scenes that control the light settings both when
