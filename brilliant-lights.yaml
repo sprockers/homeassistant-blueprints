@@ -382,10 +382,12 @@ blueprint:
       description: >
         Only want your lights to come on between specific hours?<br>
         Enable this section, specify the type of time restrictions
-        you'd like. Fill in the specific hours if you choose this option.<br>
+        you'd like. Fill in the specific hours or fine-tune dawn and dusk
+        times if you choose one of these options.<br>
         **This restriction only applies when the automation is triggered
         by occupancy.**<br>
-        _Note: the hours can straddle two days if needed._
+        _Note: The times you choose for specific hours can straddle two
+        days if needed._
       icon: mdi:clock-check
       collapsed: true
       input:
@@ -422,25 +424,31 @@ blueprint:
         dusk_elevation:
           name: Dusk Elevation
           description: >
-            Fine tune when dusk triggers based on Sun elevation
+            Fine tune when dusk triggers based on Sun elevation.<br>
+            10 degrees above or below sunset equates to approximately
+            an hour of time in each direction.
           default: 0
           selector:
             number:
-              min: -6
-              max: 3
-              step: 0.5
+              min: -10
+              max: 10
+              step: 1
               mode: slider
+              unit_of_measurement: degrees
         dawn_elevation:
           name: Dawn Elevation
           description: >
-            Fine tune when dawn triggers based on Sun elevation
+            Fine tune when dawn triggers based on Sun elevation.<br>
+            10 degrees above or below sunrise equates to approximately
+            an hour of time in each direction.
           default: 0
           selector:
             number:
-              min: -6
-              max: 3
-              step: 0.5
+              min: -10
+              max: 10
+              step: 10
               mode: slider
+              unit_of_measurement: degrees
         off_at_restriction_end:
           name: Turn Off?
           description: >
