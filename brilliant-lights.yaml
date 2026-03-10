@@ -869,67 +869,75 @@ action:
                         entity_id: !input active_status_entity
                         state: "off"
                     sequence:
-                      - action: input_boolean.turn_on
-                        metadata: {}
-                        target:
-                          entity_id: !input active_status_entity
-                        data: {}
                       - if:
-                          - condition: time
-                            after: !input time_day_start
-                            before: !input time_night_start
-                        then:
-                          - action: scene.turn_on
-                            metadata: {}
-                            target:
-                              entity_id: !input day_scene
-                            data: {}
-                        else:
-                          - action: scene.turn_on
-                            metadata: {}
-                            target:
-                              entity_id: !input night_scene
-                            data: {}
-                      - if:
-                          - condition: template
-                            value_template: "{{ active_scene is not none }}"
-                        then:
-                          - action: scene.turn_on
-                            metadata: {}
-                            target:
-                              entity_id: !input active_scene
-                            data: {}
-                      - if:
-                          # No occupancy when switch turned on
                           - condition: state
-                            entity_id: !input occupancy_sensor_entity
-                            state:
-                              - "off"
+                            entity_id: !input light_switch_entity
+                            state: "off"
+                            for:
+                              seconds: 2
                         then:
+                          - action: input_boolean.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input active_status_entity
+                            data: {}
                           - if:
-                              # Use countdown timer if available
-                              # If not, will use a trigger
+                              - condition: time
+                                after: !input time_day_start
+                                before: !input time_night_start
+                            then:
+                              - action: scene.turn_on
+                                metadata: {}
+                                target:
+                                  entity_id: !input day_scene
+                                data: {}
+                            else:
+                              - action: scene.turn_on
+                                metadata: {}
+                                target:
+                                  entity_id: !input night_scene
+                                data: {}
+                          - if:
                               - condition: template
-                                value_template: "{{ countdown_timer_enabled }}"
+                                value_template: "{{ active_scene is not none }}"
+                            then:
+                              - action: scene.turn_on
+                                metadata: {}
+                                target:
+                                  entity_id: !input active_scene
+                                data: {}
+                          - if:
+                              # No occupancy when switch turned on
+                              - condition: state
+                                entity_id: !input occupancy_sensor_entity
+                                state:
+                                  - "off"
                             then:
                               - if:
-                                  - condition: time
-                                    after: !input time_day_start
-                                    before: !input time_night_start
+                                  # Use countdown timer if available
+                                  # If not, will use a trigger
+                                  - condition: template
+                                    value_template: >
+                                      {{ countdown_timer_enabled }}
                                 then:
-                                  - action: timer.start
-                                    metadata: {}
-                                    target:
-                                      entity_id: !input countdown_timer_entity
-                                    data:
-                                      duration: !input countdown_duration_day
-                                else:
-                                  - action: timer.start
-                                    metadata: {}
-                                    target:
-                                      entity_id: !input countdown_timer_entity
-                                    data:
-                                      duration: !input countdown_duration_night
+                                  - if:
+                                      - condition: time
+                                        after: !input time_day_start
+                                        before: !input time_night_start
+                                    then:
+                                      - action: timer.start
+                                        metadata: {}
+                                        target:
+                                          entity_id: !input countdown_timer_entity
+                                        data:
+                                          duration: !input countdown_duration_day
+                                    else:
+                                      - action: timer.start
+                                        metadata: {}
+                                        target:
+                                          entity_id: !input countdown_timer_entity
+                                        data:
+                                          duration: !input countdown_duration_night
                       - delay: 2
 
           - conditions:
