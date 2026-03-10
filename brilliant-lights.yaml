@@ -421,34 +421,28 @@ blueprint:
           default: '09:00:00'
           selector:
             time: {}
-        dusk_elevation:
-          name: Dusk Elevation
+        dusk_time_offset:
+          name: Dusk Time Offset
           description: >
-            Fine tune when dusk triggers based on Sun elevation.<br>
-            10 degrees above or below sunset equates to approximately
-            an hour of time in each direction.
-          default: 0
+            Fine tune when dusk triggers based on an offset from sunset.<br>
+            e.g. `-00:30` triggers 30 minutes before sunset, `+00:30`
+            triggers 30 minutes after sunset
+          default: '-00:00'
           selector:
-            number:
-              min: -10
-              max: 10
-              step: 1
-              mode: slider
-              unit_of_measurement: degrees
-        dawn_elevation:
-          name: Dawn Elevation
+            duration:
+              allow_negative: true
+              enable_second: false
+        dawn_time_offset:
+          name: Dawn Time Offset
           description: >
-            Fine tune when dawn triggers based on Sun elevation.<br>
-            10 degrees above or below sunrise equates to approximately
-            an hour of time in each direction.
-          default: 0
+            Fine tune when dawn triggers based on an offset from sunrise.<br>
+            e.g. `-01:00` triggers one hour before sunrise, `+01:00`
+            triggers 1 hour after sunrise
+          default: '00:00'
           selector:
-            number:
-              min: -10
-              max: 10
-              step: 10
-              mode: slider
-              unit_of_measurement: degrees
+            duration:
+              allow_negative: true
+              enable_second: false
         off_at_restriction_end:
           name: Turn Off?
           description: >
@@ -635,26 +629,12 @@ action:
                                           'dusk_until_dawn' }}
                                       - condition: or
                                         conditions:
-                                          - condition: and
-                                            conditions:
-                                              - condition: state
-                                                entity_id: sun.sun
-                                                attribute: rising
-                                                state: false
-                                              - condition: numeric_state
-                                                entity_id: sun.sun
-                                                attribute: elevation
-                                                below: !input dusk_elevation
-                                          - condition: and
-                                            conditions:
-                                              - condition: state
-                                                entity_id: sun.sun
-                                                attribute: rising
-                                                state: true
-                                              - condition: numeric_state
-                                                entity_id: sun.sun
-                                                attribute: elevation
-                                                below: !input dawn_elevation
+                                          - condition: sun
+                                            after: sunset
+                                            after_offset: !input dusk_time_offset
+                                          - condition: sun
+                                            before: sunrise
+                                            before_offset: !input dawn_time_offset
                       # Process low lux options
                       - condition: or
                         conditions:
