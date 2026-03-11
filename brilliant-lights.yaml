@@ -253,6 +253,33 @@ blueprint:
                 - scene
               multiple: false
               reorder: false
+    debounce:
+      name: Debounce Lockout (Optional)
+      description: >
+        After each scene change event, the automation has a short
+        lock-out period, during which new triggers will not be
+        processed.<br>
+        This 'debounce' period is required for the automation to work
+        reliably, due to us using a light-related entity as an input.<p>
+        Think about it like this: When occupancy clearing results in
+        the lights being turned off, that in turn results in a
+        toggle trigger of the light-related entity. If we allowed that
+        to be processed, it would result in the lights being turned
+        on again immediately.<p>
+        The length of the debounce lockout can be fine-tuned here
+      icon: mdi:lock-check
+      collapsed: true
+      input:
+        debounce_lockout_period:
+          name: Debounce Lockout period
+          default: 2
+          selector:
+            number:
+              min: 0.5
+              max: 5
+              step: 0.5
+              unit_of_measurement: seconds
+              mode: slider
     optional_scenes:
       name: Additional Scenes (Optional)
       description: >
@@ -731,6 +758,7 @@ action:
                                   if illuminance_sensor_entity is not none
                                   else false }}
                 then:
+                  # Occupancy, restrictions met - turn on lights
                   - if:
                       - condition: time
                         after: !input time_day_start
@@ -771,7 +799,7 @@ action:
                         target:
                           entity_id: !input occupancy_detected_scene
                         data: {}
-                  - delay: 2
+                  - delay: !input debounce_lockout_period
               - if:
                   # Occupancy, with timer running
                   - condition: template
@@ -802,10 +830,10 @@ action:
                     entity_id: !input paused_status_entity
                     state:
                       - "off"
-                    enabled: true
                   - condition: template
                     value_template: "{{ countdown_timer_enabled }}"
                 then:
+                  # Start countdown timer
                   - if:
                       - condition: time
                         after: !input time_day_start
@@ -835,6 +863,7 @@ action:
                           entity_id: !input occupancy_cleared_scene
                         data: {}
                 else:
+                  # No timer - turn off immediately
                   - action: input_boolean.turn_off
                     metadata: {}
                     target:
@@ -856,7 +885,7 @@ action:
                         target:
                           entity_id: !input inactive_scene
                         data: {}
-                  - delay: 2
+                  - delay: !input debounce_lockout_period
 
           - conditions:
               - condition: trigger
@@ -891,7 +920,7 @@ action:
                             target:
                               entity_id: !input pause_on_scene
                             data: {}
-                      - delay: 2
+                      - delay: !input debounce_lockout_period
                   - conditions:
                       # active on, pause on
                       - condition: state
@@ -931,7 +960,7 @@ action:
                             target:
                               entity_id: !input pause_off_scene
                             data: {}
-                      - delay: 2
+                      - delay: !input debounce_lockout_period
                   - conditions:
                       # active off
                       - condition: state
@@ -1007,7 +1036,7 @@ action:
                                           entity_id: !input countdown_timer_entity
                                         data:
                                           duration: !input countdown_duration_night
-                      - delay: 2
+                      - delay: !input debounce_lockout_period
 
           - conditions:
               - condition: trigger
@@ -1034,6 +1063,7 @@ action:
                     target:
                       entity_id: !input inactive_scene
                     data: {}
+              - delay: !input debounce_lockout_period
 
           - conditions:
               - condition: trigger
@@ -1060,7 +1090,7 @@ action:
                     target:
                       entity_id: !input inactive_scene
                     data: {}
-              - delay: 2
+              - delay: !input debounce_lockout_period
 
           - conditions:
               - condition: trigger
@@ -1093,7 +1123,7 @@ action:
                     target:
                       entity_id: !input inactive_scene
                     data: {}
-              - delay: 2
+              - delay: !input debounce_lockout_period
 
           - conditions:
               - condition: trigger
@@ -1110,7 +1140,7 @@ action:
                 target:
                   entity_id: !input day_scene
                 data: {}
-              - delay: 2
+              - delay: !input debounce_lockout_period
 
           - conditions:
               - condition: trigger
@@ -1127,4 +1157,4 @@ action:
                 target:
                   entity_id: !input night_scene
                 data: {}
-              - delay: 2
+              - delay: !input debounce_lockout_period
