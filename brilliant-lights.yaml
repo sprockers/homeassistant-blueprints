@@ -801,7 +801,7 @@ action:
                         data: {}
                   - delay: !input debounce_lockout_period
               - if:
-                  # Occupancy, with timer running
+                  # Occupancy, with timer running - cancel timer
                   - condition: template
                     value_template: "{{ countdown_timer_enabled }}"
                 then:
@@ -812,7 +812,7 @@ action:
                           if countdown_timer_entity is not none
                           else false}}
                     then:
-                      - action: timer.pause
+                      - action: timer.cancel
                         metadata: {}
                         target:
                           entity_id: !input countdown_timer_entity
