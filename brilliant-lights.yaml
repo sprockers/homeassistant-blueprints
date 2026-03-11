@@ -6,7 +6,7 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.7*<p>
+    *Version: 0.9.8*<p>
 
 
     A stateful lighting scene controller which triggers
@@ -380,14 +380,32 @@ blueprint:
     restricted_hours:
       name: Restrict to Specified Hours (Optional)
       description: >
-        Only want your lights to come on between specific hours?<br>
-        Enable this section, specify the type of time restrictions
-        you'd like. Fill in the specific hours or fine-tune dawn and dusk
-        times if you choose one of these options.<br>
+        Only want your lights to come on between hours of your choosing?<p>
+        Enable this section, then choose one of the following three
+        time restriction types:
+
+
+        - Specific Time
+          - You choose a single start and end time
+            during which the automation can activate.
+          - The same time period is used 7 days per week
+          - This time period can go across two days if needed, allowing
+            overnight activation
+        - Dusk Until Dawn
+          - The automation can activate between dusk and
+            dawn, changing with the seasons
+          - You can fine-tune offsets around these start and end times
+        - Schedule
+          - The option with almost unlimited flexibility!
+          - you provide a `schedule` helper entity, in which you define
+            the periods across the week in which you wish the automation
+            to be active
+          - The automation can activate in each period when the schedule
+            is in an `on` state
+
+
         **This restriction only applies when the automation is triggered
         by occupancy.**<br>
-        _Note: The times you choose for specific hours can straddle two
-        days if needed._
       icon: mdi:clock-check
       collapsed: true
       input:
@@ -406,51 +424,71 @@ blueprint:
                   value: specific_time
                 - label: Dusk Until Dawn
                   value: dusk_until_dawn
+                - label: Schedule
+                  value: schedule
               mode: list
         restricted_hours_from:
-          name: Specific Time From
+          name: 'Specific Time: From'
           description: >
             Time from which the automation is active<br>
           default: '16:00:00'
           selector:
             time: {}
         restricted_hours_until:
-          name: Specific Time Until
+          name: 'Specific Time: Until'
           description: >
             Time until which the automation is active<br>
           default: '09:00:00'
           selector:
             time: {}
         dusk_time_offset:
-          name: Dusk Time Offset
+          name: 'Dusk Until Dawn: Dusk Offset'
           description: >
             Fine tune when dusk triggers based on an offset from sunset.<br>
-            e.g. `-00:30` triggers 30 minutes before sunset, `+00:30`
-            triggers 30 minutes after sunset
-          default: '-00:00'
+            e.g. `-0:30` allows activation from 30 minutes before sunset,
+            `+0:45` allows activation from 45 minutes after sunset
+          default: '-00:30'
           selector:
             duration:
               allow_negative: true
               enable_second: false
         dawn_time_offset:
-          name: Dawn Time Offset
+          name: 'Dusk Until Dawn: Dawn Offset'
           description: >
             Fine tune when dawn triggers based on an offset from sunrise.<br>
-            e.g. `-01:00` triggers one hour before sunrise, `+01:00`
-            triggers 1 hour after sunrise
-          default: '00:00'
+            e.g. `-1:00` prevents activation from one hour before sunrise,
+            `+1:30` prevents activation from 90 minutes after sunrise
+          default: '00:30'
           selector:
             duration:
               allow_negative: true
               enable_second: false
-        off_at_restriction_end:
-          name: Turn Off?
+        restricted_hours_schedule_entity:
+          name: 'Schedule: Entity'
           description: >
-            By default, when the end of the restricted hours is reached
-            the automation will become inactive, but the lights will remain
-            on.<br>
+            `schedule` helper entity containing the times between which
+            you'd like the automation to activate.<br>
+            You must create this entity outside of the automation.
+          default:
+          selector:
+            entity:
+              domain:
+                - schedule
+              multiple: false
+              reorder: false
+        off_at_restriction_end:
+          name: >
+            All time restriction types: Turn lights off at the end of
+            a time period?
+          description: >
+            By default, when the end of a restricted hours time period is
+            reached the automation will become inactive, but the lights will
+            remain on if the room still has occupancy.<br>
+            This is a courtesy feature to prevent people in the room being
+            plunged into darkness.<br>
+            The consequence is that the lights will not automatically turn
+            off when occupancy clears in this scenario.<br>
             Enabling this toggle will turn the lights off instead.<br>
-            Works with both specific hours and dusk until dawn options.
           default: false
           selector:
             boolean: {}
@@ -518,6 +556,7 @@ trigger_variables:
   countdown_timer_entity: !input countdown_timer_entity
   active_status_entity: !input active_status_entity
   occupancy_sensor_entity: !input occupancy_sensor_entity
+  restricted_hours_schedule_entity: !input restricted_hours_schedule_entity
 
 trigger:
   # Primary triggers - occupancy/clear/switch toggle
@@ -562,6 +601,12 @@ trigger:
     event: sunset
     offset: !input dusk_time_offset
     id: Occupancy
+  - platform: template
+    value_template: >
+      {{ is_state(restricted_hours_schedule_entity, 'on')
+      if restricted_hours_schedule_entity is not none
+      else false }}
+    id: Occupancy
   # Turn off
   - platform: time
     at: !input restricted_hours_until
@@ -569,6 +614,12 @@ trigger:
   - platform: sun
     event: sunrise
     offset: !input dawn_time_offset
+    id: End Restricted Hours
+  - platform: template
+    value_template: >
+      {{ is_state(restricted_hours_schedule_entity, 'off')
+      if restricted_hours_schedule_entity is not none
+      else false }}
     id: End Restricted Hours
 
   # Change scenes
@@ -647,6 +698,19 @@ action:
                                           - condition: sun
                                             before: sunrise
                                             before_offset: !input dawn_time_offset
+                                  # schedule
+                                  - condition: and
+                                    conditions:
+                                      - condition: template
+                                        value_template: >
+                                          {{ restricted_hours_type ==
+                                          'schedule' }}
+                                      - condition: template
+                                        value_template: >
+                                          {{ is_state(
+                                          restricted_hours_schedule_entity,'on')
+                                          if restricted_hours_schedule_entity
+                                          is not none else false }}
                       # Process low lux options
                       - condition: or
                         conditions:
@@ -999,12 +1063,10 @@ action:
               - delay: 2
 
           - conditions:
-              - condition: and
-                conditions:
-                  - condition: trigger
-                    id: End Restricted Hours
-                  - condition: template
-                    value_template: "{{ restricted_hours_enabled }}"
+              - condition: trigger
+                id: End Restricted Hours
+              - condition: template
+                value_template: "{{ restricted_hours_enabled }}"
             sequence:
               - action: input_boolean.turn_off
                 metadata: {}
