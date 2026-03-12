@@ -803,40 +803,30 @@ action:
                             before: !input time_night_start
                         then:
                           - action: scene.turn_on
-                            metadata: {}
                             target:
                               entity_id: !input day_scene
-                            data: {}
                         else:
                           - action: scene.turn_on
-                            metadata: {}
                             target:
                               entity_id: !input night_scene
-                            data: {}
                       - action: input_boolean.turn_on
-                        metadata: {}
                         target:
                           entity_id: !input active_status_entity
-                        data: {}
                       - if:
                           - condition: template
                             value_template: "{{ active_scene is not none }}"
                         then:
                           - action: scene.turn_on
-                            metadata: {}
                             target:
                               entity_id: !input active_scene
-                            data: {}
                       - if:
                           - condition: template
                             value_template: >
                               {{ occupancy_detected_scene is not none }}
                         then:
                           - action: scene.turn_on
-                            metadata: {}
                             target:
                               entity_id: !input occupancy_detected_scene
-                            data: {}
                       - delay: !input debounce_lockout_period
                   # Occupancy whilst active with timer running
                   - if:
@@ -854,10 +844,8 @@ action:
                           else false}}
                     then:
                       - action: timer.cancel
-                        metadata: {}
                         target:
                           entity_id: !input countdown_timer_entity
-                        data: {}
                       - delay: !input debounce_lockout_period
                   # Triggered by restricted time start, no occupancy
                   - if:
@@ -871,10 +859,8 @@ action:
                           {{ restricted_hours_start_scene is not none }}
                     then:
                       - action: scene.turn_on
-                        metadata: {}
                         target:
                           entity_id: !input restricted_hours_start_scene
-                        data: {}
 
           - conditions:
               - condition: trigger
@@ -898,14 +884,12 @@ action:
                         before: !input time_night_start
                     then:
                       - action: timer.start
-                        metadata: {}
                         target:
                           entity_id: !input countdown_timer_entity
                         data:
                           duration: !input countdown_duration_day
                     else:
                       - action: timer.start
-                        metadata: {}
                         target:
                           entity_id: !input countdown_timer_entity
                         data:
@@ -916,33 +900,25 @@ action:
                           {{ occupancy_cleared_scene is not none }}
                     then:
                       - action: scene.turn_on
-                        metadata: {}
                         target:
                           entity_id: !input occupancy_cleared_scene
-                        data: {}
                 else:
                   # No timer - turn off immediately
                   - action: input_boolean.turn_off
-                    metadata: {}
                     target:
                       entity_id:
                         - !input paused_status_entity
                         - !input active_status_entity
-                    data: {}
                   - action: scene.turn_on
-                    metadata: {}
                     target:
                       entity_id: !input off_scene
-                    data: {}
                   - if:
                       - condition: template
                         value_template: "{{ inactive_scene is not none }}"
                     then:
                       - action: scene.turn_on
-                        metadata: {}
                         target:
                           entity_id: !input inactive_scene
-                        data: {}
                   - delay: !input debounce_lockout_period
 
           - conditions:
@@ -960,24 +936,18 @@ action:
                         state: "off"
                     sequence:
                       - action: input_boolean.turn_on
-                        metadata: {}
                         target:
                           entity_id: !input paused_status_entity
-                        data: {}
                       - action: scene.turn_on
-                        metadata: {}
                         target:
                           entity_id: !input off_scene
-                        data: {}
                       - if:
                           - condition: template
                             value_template: "{{ pause_on_scene is not none }}"
                         then:
                           - action: scene.turn_on
-                            metadata: {}
                             target:
                               entity_id: !input pause_on_scene
-                            data: {}
                       - delay: !input debounce_lockout_period
                   - conditions:
                       # active on, pause on
@@ -989,35 +959,27 @@ action:
                         state: "on"
                     sequence:
                       - action: input_boolean.turn_off
-                        metadata: {}
                         target:
                           entity_id: !input paused_status_entity
-                        data: {}
                       - if:
                           - condition: time
                             after: !input time_day_start
                             before: !input time_night_start
                         then:
                           - action: scene.turn_on
-                            metadata: {}
                             target:
                               entity_id: !input day_scene
-                            data: {}
                         else:
                           - action: scene.turn_on
-                            metadata: {}
                             target:
                               entity_id: !input night_scene
-                            data: {}
                       - if:
                           - condition: template
                             value_template: "{{ pause_off_scene is not none }}"
                         then:
                           - action: scene.turn_on
-                            metadata: {}
                             target:
                               entity_id: !input pause_off_scene
-                            data: {}
                       - delay: !input debounce_lockout_period
                   - conditions:
                       # active off
@@ -1033,35 +995,27 @@ action:
                               seconds: !input debounce_lockout_period
                         then:
                           - action: input_boolean.turn_on
-                            metadata: {}
                             target:
                               entity_id: !input active_status_entity
-                            data: {}
                           - if:
                               - condition: time
                                 after: !input time_day_start
                                 before: !input time_night_start
                             then:
                               - action: scene.turn_on
-                                metadata: {}
                                 target:
                                   entity_id: !input day_scene
-                                data: {}
                             else:
                               - action: scene.turn_on
-                                metadata: {}
                                 target:
                                   entity_id: !input night_scene
-                                data: {}
                           - if:
                               - condition: template
                                 value_template: "{{ active_scene is not none }}"
                             then:
                               - action: scene.turn_on
-                                metadata: {}
                                 target:
                                   entity_id: !input active_scene
-                                data: {}
                           - if:
                               # No occupancy when switch turned on
                               - condition: state
@@ -1078,14 +1032,12 @@ action:
                                     before: !input time_night_start
                                 then:
                                   - action: timer.start
-                                    metadata: {}
                                     target:
                                       entity_id: !input countdown_timer_entity
                                     data:
                                       duration: !input countdown_duration_day
                                 else:
                                   - action: timer.start
-                                    metadata: {}
                                     target:
                                       entity_id: !input countdown_timer_entity
                                     data:
@@ -1097,26 +1049,20 @@ action:
                 id: Occupancy Cleared 15m
             sequence:
               - action: scene.turn_on
-                metadata: {}
                 target:
                   entity_id: !input off_scene
-                data: {}
               - action: input_boolean.turn_off
-                metadata: {}
                 target:
                   entity_id:
                     - !input paused_status_entity
                     - !input active_status_entity
-                data: {}
               - if:
                   - condition: template
                     value_template: "{{ inactive_scene is not none }}"
                 then:
                   - action: scene.turn_on
-                    metadata: {}
                     target:
                       entity_id: !input inactive_scene
-                    data: {}
               - delay: !input debounce_lockout_period
 
           - conditions:
@@ -1124,26 +1070,20 @@ action:
                 id: Timer Completed
             sequence:
               - action: input_boolean.turn_off
-                metadata: {}
                 target:
                   entity_id:
                     - !input paused_status_entity
                     - !input active_status_entity
-                data: {}
               - action: scene.turn_on
-                metadata: {}
                 target:
                   entity_id: !input off_scene
-                data: {}
               - if:
                   - condition: template
                     value_template: "{{ inactive_scene is not none }}"
                 then:
                   - action: scene.turn_on
-                    metadata: {}
                     target:
                       entity_id: !input inactive_scene
-                    data: {}
               - delay: !input debounce_lockout_period
 
           - conditions:
@@ -1158,30 +1098,24 @@ action:
                     state: "on"
                 then:
                   - action: input_boolean.turn_off
-                    metadata: {}
                     target:
                       entity_id:
                         - !input paused_status_entity
                         - !input active_status_entity
-                    data: {}
                   - if:
                       - condition: template
                         value_template: "{{ off_at_restriction_end }}"
                     then:
                       - action: scene.turn_on
-                        metadata: {}
                         target:
                           entity_id: !input off_scene
-                        data: {}
                   - if:
                       - condition: template
                         value_template: "{{ inactive_scene is not none }}"
                     then:
                       - action: scene.turn_on
-                        metadata: {}
                         target:
                           entity_id: !input inactive_scene
-                        data: {}
               - if:
                   - condition: template
                     value_template: >
@@ -1203,10 +1137,8 @@ action:
                 state: "off"
             sequence:
               - action: scene.turn_on
-                metadata: {}
                 target:
                   entity_id: !input day_scene
-                data: {}
               - delay: !input debounce_lockout_period
 
           - conditions:
@@ -1220,8 +1152,6 @@ action:
                 state: "off"
             sequence:
               - action: scene.turn_on
-                metadata: {}
                 target:
                   entity_id: !input night_scene
-                data: {}
               - delay: !input debounce_lockout_period
