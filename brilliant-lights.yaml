@@ -6,7 +6,7 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.9*<p>
+    *Version: 0.9.10*<p>
 
 
     A stateful lighting scene controller which triggers
@@ -18,18 +18,30 @@ blueprint:
 
     - **Input Entities:**
       - Occupancy/motion `binary_sensor` entity or group helper
+        - _Best practice: If you have more than one occupancy
+          sensor in the room, use a Binary Sensor Group Helper_
         - This is the primary trigger for turning your lights on and off
         - The automation activates when occupancy is detected
         - The automation stays active until occupancy clears
         - Time and lux level restrictions can be applied to the
           occupancy trigger, limiting when the automation activates
       - Light-related `switch` or `light` entity or group helper
-        - Turning on or off a physical smart switch or a light entity in
-          the UI acts as a trigger for the automation
-        - If the automation was inactive, then it is activated
+        - _Best practice: A Light Group Helper containing the lights you
+          use in your scenes_. Why? A group of lights will change state
+          when any other entity related to the lights is triggered, for
+          example a smart switch. Using a light group ensures we capture
+          as many state changes for the automation as possible
+        - A state change in the light-related entity acts as a trigger
+          for the automation
+        - If the automation was inactive and we are within any restrictions
+          then it is activated
+        - If inactive but restrictions would prevent activation, then the
+          action depends on a setting in the time restriction section.
+          You can choose to either allow the automation to activate, or
+          instead the automation stays out of the way, giving you manual
+          control of the lights
         - If the automation was already active, then it is paused
-        - The automation will stay active until occupancy clears,
-          meaning the lights will turn off automatically
+        - If the automatiomn was paused, then it un-pauses
         - This trigger works regardless of any time or low lux restrictions
           ensuring that you can always turn on and off you lights
         - See Key Concepts below for definitions of active and paused states
@@ -44,15 +56,16 @@ blueprint:
           the timer has counted down to zero
         - Active state is stored in an `input_boolean` helper
         - You must define this helper outside of the automation
-        - Whilst the automation remains active for some time, the automation
-          itself only runs for short periods to process triggers and run
-          actions, completing the automation run each time
+        - Whilst the automation remains active (and your lights remain on) for
+          some time, the automation itself only runs for short periods to
+          process triggers and run actions, completing the automation run
+          each time
       - Pause State
-        - The automation is paused if you turn off the lights using the light
-          switch or light entity in the UI whilst the automation is active
+        - The automation is paused if you turn off the lights using the light-
+          related entity whilst the automation is active
         - This is a convenience to ensure that the lights stay off until
           the automation becomes inactive, or until you turn the lights back on
-          using the switch or light entity in the UI
+          using the light-related entity in the UI
         - The automation remains active whilst in pause state, with the usual
           rules in place regarding when the automation becomes inactive
         - Pause state is stored in an `input_boolean` helper
@@ -61,20 +74,20 @@ blueprint:
         - The turning on and off of lights and other entities are all handled
           via Home Assistant Scenes
         - Scenes are versatile - you define them outside of the automation, and
-          you can add many entities of varying types
+          you can add many entities of varying types - not just lights!
         - We use two scenes to control entities related to lights turning on,
           one for day time (Day Scene) and another for night time (Night Scene).
           In simple terms these are used to turn on your lights, however what
           you choose to do with the scenes is under your control
         - We use one scene to control entities when the lights are turned off
           (Off Scene). This is typically used to turn off your lights
-        - In addition, we have an optional scene that can be called when the
-          automation becomes active (Active Scene), and another optional scene
-          that gets called when the automation becomes inactive (Inactive Scene)
-        - Note that these optional scenes fire at subtly different times to the
-          on and off scenes, as e.g. the Off scene will fire when the automation
-          becomes paused. The Inactive scene does not fire at this point,
-          because the automation remains active when this happens
+        - The above three scenes must all be specified
+        - In addition we have a series of optional scenes that fire when
+          various events trigger in the automation
+        - The names of these scenes in the UI help you understand when they get
+          triggered
+        - By using these optional scenes you can create sophisticated lighting
+          patterns
         - Scenes are switched between at their respective times of day if the
           automation is active
       - Countdown Timer (Optional)
@@ -97,19 +110,39 @@ blueprint:
       - Restrict Hours (Optional)
         - You can optionally enable config to restrict the hours between which
           the automation can activate via the occupancy trigger
-        - You can choose between a specific set of hours, or dusk until dawn
-        - The hours you specify can be across two days if needed
-        - The dusk until dawn setting changes with the seasons
+        - You can choose between a specific set of hours, dusk until dawn or
+          a full week schedule entity
+        - If you choose the specific hours option then the hours you specify
+          can be across two days if needed
+        - The dusk until dawn option changes operating hours with the seasons,
+          and you can fine-tune dusk and dawn offset times
+        - The schedule entity allows you almost limitless control over the times
+          at which the automation can activate, including multiple time slots
+          per day, and different slots for each day of the week
         - By default at the end of the restricted time block the automation will
-          become inactive, but the lights will stay on
+          become inactive, but the lights will stay on if there is still
+          occupancy detected. This is a courtesy to those present in the room to
+          ensure they are not plunged into darkness
         - You can optionally choose for the lights to turn off at the end of the
-          limited time block
+          restricted time block instead
       - Restrict to Low Lux (Optional)
         - You can optionally enable config to restrict the activation of the
           automation from occupancy to times when the lux level in the room is
           below a given value
         - This convenient function allows you to ensure that your lights only
           come on during daylight if for some reason the room is unusually dark
+      - Allow automation activation outside of restricted time block when
+        light-related entity changes state
+        - By default, if you change the state of the light-related entity when
+          the automation is inactive and outside of a restricted time block, the
+          automation will activate, and will use its usual rules regarding when
+          to become inactive again
+        - You can optionally change this setting so that in the above scenario
+          the automation does not activate, leaving the light-related entity
+          under your manual control for on/off events
+        - Whichever option you chose, changing the state of the light-related
+          entity will always result in your lights turning on or off in an
+          intuitive way
     </details>
   domain: automation
   input:
@@ -119,9 +152,7 @@ blueprint:
         The following entities are the primary input triggers for your
         automation.<br>
         The automation will activate when occupancy is detected, or
-        when someone toggles the light-related entity.<br>
-        *Tip: If you have more than one entity, create a group helper and
-        then use that here.*
+        when the state of the light-related entity changes.<br>
       icon: mdi:home-import-outline
       collapsed: true
       input:
@@ -129,6 +160,9 @@ blueprint:
           name: Occupancy Sensor (Required)
           description: >
             The binary sensor detecting occupancy or motion.<br>
+            _Best practivce: If you have more than one occupancy sensor, create
+            a Binary Sensor Group Helper which contains all of your occupancy
+            sensors_
           selector:
             entity:
               domain:
@@ -139,14 +173,14 @@ blueprint:
               multiple: false
               reorder: false
         light_switch_entity:
-          name: Light-Related Entity (Required)
+          name: Light Group or Other Light-Related Entity (Required)
           description: >
-            This represents one or more of the light(s) you are controlling,
-            and can be either a `switch` or `light` entity type.<br>
-            This could be an individual entity, or a group helper entity.<br>
+            _Best Practice: Use a Light Group Helper, which contains all of the
+            light entities you control with scenes in this room_<br>
+            This could also be an individual light or switch entity.<br>
             The entity provided acts as a trigger for the automation. In other
             words, if you turn the light on or off via the UI, or with a smart
-            switch then automation will trigger and act appropriately.
+            switch then the automation will trigger and act appropriately.
           selector:
             entity:
               domain:
@@ -950,9 +984,6 @@ action:
                           - condition: state
                             entity_id: !input paused_status_entity
                             state: "off"
-                          - condition: template
-                            value_template: >
-                              {{ light_switch_action == "off"}}
                         sequence:
                           - action: input_boolean.turn_on
                             target:
@@ -979,9 +1010,6 @@ action:
                           - condition: state
                             entity_id: !input paused_status_entity
                             state: "on"
-                          - condition: template
-                            value_template: >
-                              {{ light_switch_action == "on"}}
                         sequence:
                           - action: input_boolean.turn_off
                             target:
