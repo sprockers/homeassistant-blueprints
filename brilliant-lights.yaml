@@ -817,6 +817,8 @@ action:
                         target:
                           entity_id: !input countdown_timer_entity
                         data: {}
+                      - delay: !input debounce_lockout_period
+
 
           - conditions:
               - condition: trigger
