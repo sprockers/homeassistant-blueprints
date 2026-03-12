@@ -6,7 +6,7 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.8*<p>
+    *Version: 0.9.9*<p>
 
 
     A stateful lighting scene controller which triggers
@@ -336,6 +336,26 @@ blueprint:
               domain: scene
               multiple: false
               reorder: false
+        restricted_hours_start_scene:
+          name: Restricted Hours Start Scene (optional)
+          description: >
+            Triggers at the start of a restricted hours period
+          default:
+          selector:
+            entity:
+              domain: scene
+              multiple: false
+              reorder: false
+        restricted_hours_end_scene:
+          name: Restricted Hours End Scene (optional)
+          description: >
+            Triggers at the end of a restricted hours period
+          default:
+          selector:
+            entity:
+              domain: scene
+              multiple: false
+              reorder: false
         pause_on_scene:
           name: Automation Paused Scene (optional)
           description: >
@@ -623,17 +643,17 @@ trigger:
   # Turn on
   - platform: time
     at: !input restricted_hours_from
-    id: Occupancy
+    id: Start Restricted Hours
   - platform: sun
     event: sunset
     offset: !input dusk_time_offset
-    id: Occupancy
+    id: Start Restricted Hours
   - platform: template
     value_template: >
       {{ is_state(restricted_hours_schedule_entity, 'on')
       if restricted_hours_schedule_entity is not none
       else false }}
-    id: Occupancy
+    id: Start Restricted Hours
   # Turn off
   - platform: time
     at: !input restricted_hours_until
@@ -671,141 +691,162 @@ action:
     then:
       - choose:
           - conditions:
-              - condition: trigger
-                id: Occupancy
-              - condition: state
-                entity_id: !input occupancy_sensor_entity
-                state: 'on'
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: Occupancy
+                  - condition: trigger
+                    id: Start Restricted Hours
               - condition: state
                 entity_id: !input paused_status_entity
                 state: 'off'
             sequence:
+              # First process the restriction conditions to determine
+              # whether we should be activating the automation
+              - variables:
+                  restricted_hours_condition: false
+                  low_lux_condition: false
+
+              # Process Restricted Hours Condiroons
               - if:
-                  # Only proceed if restricted hours and low lux sections
-                  # are either not used or eval to true
-                  - condition: and
-                    conditions:
-                      # Process restricted hours options
+                  - condition: template
+                    value_template: "{{ not restricted_hours_enabled }}"
+                then:
+                  - variables:
+                      restricted_hours_condition: true
+                else:
+                  # Restricted hours enabled options
+                  - if:
                       - condition: or
                         conditions:
-                          # Restricted hours not enabled
-                          - condition: template
-                            value_template: "{{ not restricted_hours_enabled }}"
-                          # Restricted hours enabled
-                          # One set of time constraints must eval to true to
-                          # allow automation to activate
+                          # between specific times
                           - condition: and
                             conditions:
-                              - condition: template
-                                value_template: "{{ restricted_hours_enabled }}"
-                              - condition: or
-                                conditions:
-                                  # between specific times
-                                  - condition: and
-                                    conditions:
-                                      - condition: template
-                                        value_template: >
-                                          {{ restricted_hours_type ==
-                                          'specific_time' }}
-                                      - condition: time
-                                        before: !input restricted_hours_until
-                                        after: !input restricted_hours_from
-                                  # from dusk until dawn
-                                  - condition: and
-                                    conditions:
-                                      - condition: template
-                                        value_template: >
-                                          {{ restricted_hours_type ==
-                                          'dusk_until_dawn' }}
-                                      - condition: or
-                                        conditions:
-                                          - condition: sun
-                                            after: sunset
-                                            after_offset: !input dusk_time_offset
-                                          - condition: sun
-                                            before: sunrise
-                                            before_offset: !input dawn_time_offset
-                                  # schedule
-                                  - condition: and
-                                    conditions:
-                                      - condition: template
-                                        value_template: >
-                                          {{ restricted_hours_type ==
-                                          'schedule' }}
-                                      - condition: template
-                                        value_template: >
-                                          {{ is_state(
-                                          restricted_hours_schedule_entity,'on')
-                                          if restricted_hours_schedule_entity
-                                          is not none else false }}
-                      # Process low lux options
-                      - condition: or
-                        conditions:
-                          # Low lux not enabled
-                          - condition: template
-                            value_template: "{{ not low_lux_enabled }}"
-                          # Low lux enabled
-                          # lux must be below threshold for automation to
-                          # activate
-                          - condition: and
-                            conditions:
-                              - condition: template
-                                value_template: "{{ low_lux_enabled }}"
                               - condition: template
                                 value_template: >
-                                  {{ states(illuminance_sensor_entity)|float <
-                                  illuminance_threshold|float
-                                  if illuminance_sensor_entity is not none
-                                  else false }}
+                                  {{ restricted_hours_type ==
+                                  'specific_time' }}
+                              - condition: time
+                                before: !input restricted_hours_until
+                                after: !input restricted_hours_from
+                          # from dusk until dawn
+                          - condition: and
+                            conditions:
+                              - condition: template
+                                value_template: >
+                                  {{ restricted_hours_type ==
+                                  'dusk_until_dawn' }}
+                              - condition: or
+                                conditions:
+                                  - condition: sun
+                                    after: sunset
+                                    after_offset: !input dusk_time_offset
+                                  - condition: sun
+                                    before: sunrise
+                                    before_offset: !input dawn_time_offset
+                          # schedule
+                          - condition: and
+                            conditions:
+                              - condition: template
+                                value_template: >
+                                  {{ restricted_hours_type ==
+                                  'schedule' }}
+                              - condition: template
+                                value_template: >
+                                  {{ is_state(
+                                  restricted_hours_schedule_entity,'on')
+                                  if restricted_hours_schedule_entity
+                                  is not none else false }}
+                    then:
+                      - variables:
+                          restricted_hours_condition: true
+              # Process Low Lux Conditions
+              - if:
+                  # Low lux not enabled
+                  - condition: template
+                    value_template: "{{ not low_lux_enabled }}"
                 then:
-                  # Occupancy, restrictions met - turn on lights
+                  - variables:
+                      low_lux_condition: true
+                else:
                   - if:
-                      - condition: time
-                        after: !input time_day_start
-                        before: !input time_night_start
-                    then:
-                      - action: scene.turn_on
-                        metadata: {}
-                        target:
-                          entity_id: !input day_scene
-                        data: {}
-                    else:
-                      - action: scene.turn_on
-                        metadata: {}
-                        target:
-                          entity_id: !input night_scene
-                        data: {}
-                  - action: input_boolean.turn_on
-                    metadata: {}
-                    target:
-                      entity_id: !input active_status_entity
-                    data: {}
-                  - if:
-                      - condition: template
-                        value_template: "{{ active_scene is not none }}"
-                    then:
-                      - action: scene.turn_on
-                        metadata: {}
-                        target:
-                          entity_id: !input active_scene
-                        data: {}
-                  - if:
+                      # Low lux enabled and below threshold
                       - condition: template
                         value_template: >
-                          {{ occupancy_detected_scene is not none }}
+                          {{ states(illuminance_sensor_entity)|float <
+                          illuminance_threshold|float
+                          if illuminance_sensor_entity is not none
+                          else false }}
                     then:
-                      - action: scene.turn_on
+                      - variables:
+                          low_lux_condition: true
+
+              # Only proceed to activation if restriction conditions are true
+              - if:
+                  - condition: template
+                    value_template: "{{ restricted_hours_condition }}"
+                  - condition: template
+                    value_template: "{{ low_lux_condition }}"
+                then:
+                  # Occupancy whilst inactive
+                  - if:
+                      - condition: state
+                        entity_id: !input occupancy_sensor_entity
+                        state: "on"
+                      - condition: state
+                        entity_id: !input active_status_entity
+                        state: "off"
+                    then:
+                      - if:
+                          - condition: time
+                            after: !input time_day_start
+                            before: !input time_night_start
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input day_scene
+                            data: {}
+                        else:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input night_scene
+                            data: {}
+                      - action: input_boolean.turn_on
                         metadata: {}
                         target:
-                          entity_id: !input occupancy_detected_scene
+                          entity_id: !input active_status_entity
                         data: {}
-                  - delay: !input debounce_lockout_period
-              - if:
-                  # Occupancy, with timer running - cancel timer
-                  - condition: template
-                    value_template: "{{ countdown_timer_enabled }}"
-                then:
+                      - if:
+                          - condition: template
+                            value_template: "{{ active_scene is not none }}"
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input active_scene
+                            data: {}
+                      - if:
+                          - condition: template
+                            value_template: >
+                              {{ occupancy_detected_scene is not none }}
+                        then:
+                          - action: scene.turn_on
+                            metadata: {}
+                            target:
+                              entity_id: !input occupancy_detected_scene
+                            data: {}
+                      - delay: !input debounce_lockout_period
+                  # Occupancy whilst active with timer running
                   - if:
+                      - condition: trigger
+                        id: Occupancy
+                      - condition: state
+                        entity_id: !input active_status_entity
+                        state: "on"
+                      - condition: template
+                        value_template: "{{ countdown_timer_enabled }}"
                       - condition: template
                         value_template: >
                           {{ is_state(countdown_timer_entity, 'active')
@@ -818,7 +859,22 @@ action:
                           entity_id: !input countdown_timer_entity
                         data: {}
                       - delay: !input debounce_lockout_period
-
+                  # Triggered by restricted time start, no occupancy
+                  - if:
+                      - condition: trigger
+                        id: Start Restricted Hours
+                      - condition: state
+                        entity_id: !input occupancy_sensor_entity
+                        state: "off"
+                      - condition: template
+                        value_template: >
+                          {{ restricted_hours_start_scene is not none }}
+                    then:
+                      - action: scene.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input restricted_hours_start_scene
+                        data: {}
 
           - conditions:
               - condition: trigger
@@ -1012,32 +1068,28 @@ action:
                                 entity_id: !input occupancy_sensor_entity
                                 state:
                                   - "off"
+                              - condition: template
+                                value_template: >
+                                  {{ countdown_timer_enabled }}
                             then:
                               - if:
-                                  # Use countdown timer if available
-                                  # If not, will use a trigger
-                                  - condition: template
-                                    value_template: >
-                                      {{ countdown_timer_enabled }}
+                                  - condition: time
+                                    after: !input time_day_start
+                                    before: !input time_night_start
                                 then:
-                                  - if:
-                                      - condition: time
-                                        after: !input time_day_start
-                                        before: !input time_night_start
-                                    then:
-                                      - action: timer.start
-                                        metadata: {}
-                                        target:
-                                          entity_id: !input countdown_timer_entity
-                                        data:
-                                          duration: !input countdown_duration_day
-                                    else:
-                                      - action: timer.start
-                                        metadata: {}
-                                        target:
-                                          entity_id: !input countdown_timer_entity
-                                        data:
-                                          duration: !input countdown_duration_night
+                                  - action: timer.start
+                                    metadata: {}
+                                    target:
+                                      entity_id: !input countdown_timer_entity
+                                    data:
+                                      duration: !input countdown_duration_day
+                                else:
+                                  - action: timer.start
+                                    metadata: {}
+                                    target:
+                                      entity_id: !input countdown_timer_entity
+                                    data:
+                                      duration: !input countdown_duration_night
                       - delay: !input debounce_lockout_period
 
           - conditions:
@@ -1100,31 +1152,44 @@ action:
               - condition: template
                 value_template: "{{ restricted_hours_enabled }}"
             sequence:
-              - action: input_boolean.turn_off
-                metadata: {}
-                target:
-                  entity_id:
-                    - !input paused_status_entity
-                    - !input active_status_entity
-                data: {}
               - if:
-                  - condition: template
-                    value_template: "{{ off_at_restriction_end }}"
+                  - condition: state
+                    entity_id: !input active_status_entity
+                    state: "on"
                 then:
-                  - action: scene.turn_on
+                  - action: input_boolean.turn_off
                     metadata: {}
                     target:
-                      entity_id: !input off_scene
+                      entity_id:
+                        - !input paused_status_entity
+                        - !input active_status_entity
                     data: {}
+                  - if:
+                      - condition: template
+                        value_template: "{{ off_at_restriction_end }}"
+                    then:
+                      - action: scene.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input off_scene
+                        data: {}
+                  - if:
+                      - condition: template
+                        value_template: "{{ inactive_scene is not none }}"
+                    then:
+                      - action: scene.turn_on
+                        metadata: {}
+                        target:
+                          entity_id: !input inactive_scene
+                        data: {}
               - if:
                   - condition: template
-                    value_template: "{{ inactive_scene is not none }}"
+                    value_template: >
+                      {{ restricted_hours_end_scene is not none }}
                 then:
                   - action: scene.turn_on
-                    metadata: {}
                     target:
-                      entity_id: !input inactive_scene
-                    data: {}
+                      entity_id: !input restricted_hours_end_scene
               - delay: !input debounce_lockout_period
 
           - conditions:
