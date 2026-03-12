@@ -327,7 +327,7 @@ blueprint:
               multiple: false
               reorder: false
         occupancy_cleared_scene:
-          name: Occupancy Cleared Scene (optional)
+          name: OccupancyCleared Scene (optional)
           description: >
             Triggers when occupancy clears
           default:
@@ -539,6 +539,23 @@ blueprint:
           default: false
           selector:
             boolean: {}
+        start_automation_beyond_restricted_hours:
+          name: >
+            All time restriction types: Activate automation when lights
+            manually turned on outside of restricted hours?
+          description: >
+            By default, if you turn on light controlled by the automation
+            when you are not within your restricted hours, the automation
+            will activate (but without applying any restrictions).<br>
+            This means that the automation will use all of its usual rules
+            to determine when to automatically turn off the lights and become
+            inactive again.<br>
+            If you turn off this setting, then the automation will not activate
+            in this scenario, meaning that you must manually control the on/off
+            nature of the lights yourself.
+          default: true
+          selector:
+            boolean: {}
     low_lux:
       name: Restrict to Low Lux (Optional)
       description: >
@@ -597,6 +614,7 @@ variables:
   pause_on_scene: !input pause_on_scene
   pause_off_scene: !input pause_off_scene
   countdown_timer_enabled: !input countdown_timer_enabled
+  start_automation_beyond_restricted_hours: !input start_automation_beyond_restricted_hours
 
 trigger_variables:
   countdown_timer_enabled: !input countdown_timer_enabled
@@ -604,78 +622,82 @@ trigger_variables:
   active_status_entity: !input active_status_entity
   occupancy_sensor_entity: !input occupancy_sensor_entity
   restricted_hours_schedule_entity: !input restricted_hours_schedule_entity
+  light_switch_entity: !input light_switch_entity
 
-trigger:
+triggers:
   # Primary triggers - occupancy/clear/switch toggle
-  - platform: state
+  - trigger: state
     entity_id: !input occupancy_sensor_entity
     to: 'on'
     id: Occupancy
-  - platform: state
+  - trigger: state
     entity_id: !input occupancy_sensor_entity
     to: 'off'
-    id: Occupancy Cleared
-  - platform: state
+    id: OccupancyCleared
+  - trigger: state
     entity_id: !input light_switch_entity
-    id: Light Switch Toggle
+    id: LightStateChange
+    variables:
+      light_switch_action: "{{ trigger.to_state.state }}"
+
 
   # Extra catchall clean up
-  - platform: state
+  - trigger: state
     entity_id: !input occupancy_sensor_entity
     to: 'off'
     for:
       minutes: 15
-    id: Occupancy Cleared 15m
+    id: OccupancyCleared15m
 
   # Timer completion
-  - platform: template
+  - trigger: template
     value_template: "{{ is_state(countdown_timer_entity, 'idle') }}"
-    id: Timer Completed
-  - platform: template
+    id: TimerCompleted
+  - trigger: template
     value_template: >
       {{ countdown_timer_enabled is false and
       is_state(active_status_entity, "on") and
       is_state(occupancy_sensor_entity, "off") }}
     for: !input countdown_duration_day
-    id: Timer Completed
+    id: TimerCompleted
 
   # Time Restrictions
   # Turn on
-  - platform: time
+  - trigger: time
     at: !input restricted_hours_from
-    id: Start Restricted Hours
-  - platform: sun
+    id: StartRestrictedHours
+  - trigger: sun
     event: sunset
     offset: !input dusk_time_offset
-    id: Start Restricted Hours
-  - platform: template
+    id: StartRestrictedHours
+  - trigger: template
     value_template: >
       {{ is_state(restricted_hours_schedule_entity, 'on')
       if restricted_hours_schedule_entity is not none
       else false }}
-    id: Start Restricted Hours
+    id: StartRestrictedHours
   # Turn off
-  - platform: time
+  - trigger: time
     at: !input restricted_hours_until
-    id: End Restricted Hours
-  - platform: sun
+    id: EndRestrictedHours
+  - trigger: sun
     event: sunrise
     offset: !input dawn_time_offset
-    id: End Restricted Hours
-  - platform: template
+    id: EndRestrictedHours
+  - trigger: template
     value_template: >
       {{ is_state(restricted_hours_schedule_entity, 'off')
       if restricted_hours_schedule_entity is not none
       else false }}
-    id: End Restricted Hours
+    id: EndRestrictedHours
 
   # Change scenes
-  - platform: time
+  - trigger: time
     at: !input time_day_start
-    id: Time Day Start
-  - platform: time
+    id: TimeDayStart
+  - trigger: time
     at: !input time_night_start
-    id: Time Night Start
+    id: TimeNightStart
 
 action:
   - if:
@@ -696,10 +718,9 @@ action:
                   - condition: trigger
                     id: Occupancy
                   - condition: trigger
-                    id: Start Restricted Hours
-              - condition: state
-                entity_id: !input paused_status_entity
-                state: 'off'
+                    id: StartRestrictedHours
+                  - condition: trigger
+                    id: LightStateChange
             sequence:
               # First process the restriction conditions to determine
               # whether we should be activating the automation
@@ -781,90 +802,229 @@ action:
                       - variables:
                           low_lux_condition: true
 
-              # Only proceed to activation if restriction conditions are true
+              # Only proceed to activation if:
+              # Inactive plus restriction conditions are true - or -
+              # Light state change with allow switch - or -
+              # Automation is active
               - if:
-                  - condition: template
-                    value_template: "{{ restricted_hours_condition }}"
-                  - condition: template
-                    value_template: "{{ low_lux_condition }}"
-                then:
-                  # Occupancy whilst inactive
-                  - if:
-                      - condition: state
-                        entity_id: !input occupancy_sensor_entity
-                        state: "on"
-                      - condition: state
-                        entity_id: !input active_status_entity
-                        state: "off"
-                    then:
-                      - if:
-                          - condition: time
-                            after: !input time_day_start
-                            before: !input time_night_start
-                        then:
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input day_scene
-                        else:
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input night_scene
-                      - action: input_boolean.turn_on
-                        target:
-                          entity_id: !input active_status_entity
-                      - if:
+                  - condition: or
+                    conditions:
+                      - condition: and
+                        conditions:
                           - condition: template
-                            value_template: "{{ active_scene is not none }}"
-                        then:
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input active_scene
-                      - if:
+                            value_template: "{{ restricted_hours_condition }}"
+                          - condition: template
+                            value_template: "{{ low_lux_condition }}"
+                      - condition: and
+                        conditions:
+                          - condition: trigger
+                            id: LightStateChange
                           - condition: template
                             value_template: >
-                              {{ occupancy_detected_scene is not none }}
-                        then:
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input occupancy_detected_scene
-                      - delay: !input debounce_lockout_period
-                  # Occupancy whilst active with timer running
-                  - if:
-                      - condition: trigger
-                        id: Occupancy
+                              {{ start_automation_beyond_restricted_hours }}
                       - condition: state
                         entity_id: !input active_status_entity
                         state: "on"
-                      - condition: template
-                        value_template: "{{ countdown_timer_enabled }}"
-                      - condition: template
-                        value_template: >
-                          {{ is_state(countdown_timer_entity, 'active')
-                          if countdown_timer_entity is not none
-                          else false}}
-                    then:
-                      - action: timer.cancel
-                        target:
-                          entity_id: !input countdown_timer_entity
-                      - delay: !input debounce_lockout_period
-                  # Triggered by restricted time start, no occupancy
-                  - if:
-                      - condition: trigger
-                        id: Start Restricted Hours
-                      - condition: state
-                        entity_id: !input occupancy_sensor_entity
-                        state: "off"
-                      - condition: template
-                        value_template: >
-                          {{ restricted_hours_start_scene is not none }}
-                    then:
-                      - action: scene.turn_on
-                        target:
-                          entity_id: !input restricted_hours_start_scene
+                then:
+                  - choose:
+                      # Primary activation block:
+                      # Occupancy whilst inactive - or -
+                      # 0: Light state change to on
+                      - conditions:
+                          - condition: or
+                            conditions:
+                              - condition: and
+                                conditions:
+                                  - condition: state
+                                    entity_id: !input occupancy_sensor_entity
+                                    state: "on"
+                                  - condition: state
+                                    entity_id: !input active_status_entity
+                                    state: "off"
+                              - condition: and
+                                conditions:
+                                  - condition: trigger
+                                    id: LightStateChange
+                                  - condition: state
+                                    entity_id: !input active_status_entity
+                                    state: "off"
+                                  - condition: template
+                                    value_template: >
+                                      {{ light_switch_action == 'on' }}
+                        sequence:
+                          # Set active status
+                          - action: input_boolean.turn_on
+                            target:
+                              entity_id: !input active_status_entity
+                          # Turn on the lights to correct time of day scene
+                          - if:
+                              - condition: time
+                                after: !input time_day_start
+                                before: !input time_night_start
+                            then:
+                              - action: scene.turn_on
+                                target:
+                                  entity_id: !input day_scene
+                            else:
+                              - action: scene.turn_on
+                                target:
+                                  entity_id: !input night_scene
+                          # Turn on active_scene, if defined
+                          - if:
+                              - condition: template
+                                value_template: "{{ active_scene is not none }}"
+                            then:
+                              - action: scene.turn_on
+                                target:
+                                  entity_id: !input active_scene
+                          # Turn on occupancy_detected_scene if defined
+                          # plus occupancy
+                          - if:
+                              - condition: state
+                                entity_id: !input occupancy_sensor_entity
+                                state: "on"
+                              - condition: template
+                                value_template: >
+                                  {{ occupancy_detected_scene is not none }}
+                            then:
+                              - action: scene.turn_on
+                                target:
+                                  entity_id: !input occupancy_detected_scene
+                          # Light state change with no occupancy and
+                          # timer enabled
+                          - if:
+                              - condition: trigger
+                                id: LightStateChange
+                              - condition: state
+                                entity_id: !input occupancy_sensor_entity
+                                state:
+                                  - "off"
+                              - condition: template
+                                value_template: >
+                                  {{ countdown_timer_enabled }}
+                            then:
+                              - if:
+                                  - condition: time
+                                    after: !input time_day_start
+                                    before: !input time_night_start
+                                then:
+                                  - action: timer.start
+                                    target:
+                                      entity_id: !input countdown_timer_entity
+                                    data:
+                                      duration: !input countdown_duration_day
+                                else:
+                                  - action: timer.start
+                                    target:
+                                      entity_id: !input countdown_timer_entity
+                                    data:
+                                      duration: !input countdown_duration_night
+
+                          - delay: !input debounce_lockout_period
+                      # 1: Occupancy whilst active with timer running
+                      - conditions:
+                          - condition: trigger
+                            id: Occupancy
+                          - condition: state
+                            entity_id: !input active_status_entity
+                            state: "on"
+                          - condition: template
+                            value_template: "{{ countdown_timer_enabled }}"
+                          - condition: template
+                            value_template: >
+                              {{ is_state(countdown_timer_entity, 'active')
+                              if countdown_timer_entity is not none
+                              else false}}
+                        sequence:
+                          - action: timer.cancel
+                            target:
+                              entity_id: !input countdown_timer_entity
+                          - delay: !input debounce_lockout_period
+                      # 2: Light state change whilst active and not paused
+                      - conditions:
+                          - condition: trigger
+                            id: LightStateChange
+                          - condition: state
+                            entity_id: !input active_status_entity
+                            state: "on"
+                          - condition: state
+                            entity_id: !input paused_status_entity
+                            state: "off"
+                          - condition: template
+                            value_template: >
+                              {{ light_switch_action == "off"}}
+                        sequence:
+                          - action: input_boolean.turn_on
+                            target:
+                              entity_id: !input paused_status_entity
+                          - action: scene.turn_on
+                            target:
+                              entity_id: !input off_scene
+                          - if:
+                              - condition: template
+                                value_template: >
+                                  {{ pause_on_scene is not none }}
+                            then:
+                              - action: scene.turn_on
+                                target:
+                                  entity_id: !input pause_on_scene
+                          - delay: !input debounce_lockout_period
+                      # 3: Light state change whilst active and paused
+                      - conditions:
+                          - condition: trigger
+                            id: LightStateChange
+                          - condition: state
+                            entity_id: !input active_status_entity
+                            state: "on"
+                          - condition: state
+                            entity_id: !input paused_status_entity
+                            state: "on"
+                          - condition: template
+                            value_template: >
+                              {{ light_switch_action == "on"}}
+                        sequence:
+                          - action: input_boolean.turn_off
+                            target:
+                              entity_id: !input paused_status_entity
+                          - if:
+                              - condition: time
+                                after: !input time_day_start
+                                before: !input time_night_start
+                            then:
+                              - action: scene.turn_on
+                                target:
+                                  entity_id: !input day_scene
+                            else:
+                              - action: scene.turn_on
+                                target:
+                                  entity_id: !input night_scene
+                          - if:
+                              - condition: template
+                                value_template: >
+                                  {{ pause_off_scene is not none }}
+                            then:
+                              - action: scene.turn_on
+                                target:
+                                  entity_id: !input pause_off_scene
+                          - delay: !input debounce_lockout_period
+                      # 4: Triggered by restricted time start, no occupancy
+                      - conditions:
+                          - condition: trigger
+                            id: StartRestrictedHours
+                          - condition: state
+                            entity_id: !input occupancy_sensor_entity
+                            state: "off"
+                          - condition: template
+                            value_template: >
+                              {{ restricted_hours_start_scene is not none }}
+                        sequence:
+                          - action: scene.turn_on
+                            target:
+                              entity_id: !input restricted_hours_start_scene
 
           - conditions:
               - condition: trigger
-                id: Occupancy Cleared
+                id: OccupancyCleared
               - condition: state
                 entity_id: !input active_status_entity
                 state: 'on'
@@ -923,130 +1083,7 @@ action:
 
           - conditions:
               - condition: trigger
-                id: Light Switch Toggle
-            sequence:
-              - choose:
-                  - conditions:
-                      # active on, pause off
-                      - condition: state
-                        entity_id: !input active_status_entity
-                        state: "on"
-                      - condition: state
-                        entity_id: !input paused_status_entity
-                        state: "off"
-                    sequence:
-                      - action: input_boolean.turn_on
-                        target:
-                          entity_id: !input paused_status_entity
-                      - action: scene.turn_on
-                        target:
-                          entity_id: !input off_scene
-                      - if:
-                          - condition: template
-                            value_template: "{{ pause_on_scene is not none }}"
-                        then:
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input pause_on_scene
-                      - delay: !input debounce_lockout_period
-                  - conditions:
-                      # active on, pause on
-                      - condition: state
-                        entity_id: !input active_status_entity
-                        state: "on"
-                      - condition: state
-                        entity_id: !input paused_status_entity
-                        state: "on"
-                    sequence:
-                      - action: input_boolean.turn_off
-                        target:
-                          entity_id: !input paused_status_entity
-                      - if:
-                          - condition: time
-                            after: !input time_day_start
-                            before: !input time_night_start
-                        then:
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input day_scene
-                        else:
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input night_scene
-                      - if:
-                          - condition: template
-                            value_template: "{{ pause_off_scene is not none }}"
-                        then:
-                          - action: scene.turn_on
-                            target:
-                              entity_id: !input pause_off_scene
-                      - delay: !input debounce_lockout_period
-                  - conditions:
-                      # active off
-                      - condition: state
-                        entity_id: !input active_status_entity
-                        state: "off"
-                    sequence:
-                      - if:
-                          - condition: state
-                            entity_id: !input light_switch_entity
-                            state: "off"
-                            for:
-                              seconds: !input debounce_lockout_period
-                        then:
-                          - action: input_boolean.turn_on
-                            target:
-                              entity_id: !input active_status_entity
-                          - if:
-                              - condition: time
-                                after: !input time_day_start
-                                before: !input time_night_start
-                            then:
-                              - action: scene.turn_on
-                                target:
-                                  entity_id: !input day_scene
-                            else:
-                              - action: scene.turn_on
-                                target:
-                                  entity_id: !input night_scene
-                          - if:
-                              - condition: template
-                                value_template: "{{ active_scene is not none }}"
-                            then:
-                              - action: scene.turn_on
-                                target:
-                                  entity_id: !input active_scene
-                          - if:
-                              # No occupancy when switch turned on
-                              - condition: state
-                                entity_id: !input occupancy_sensor_entity
-                                state:
-                                  - "off"
-                              - condition: template
-                                value_template: >
-                                  {{ countdown_timer_enabled }}
-                            then:
-                              - if:
-                                  - condition: time
-                                    after: !input time_day_start
-                                    before: !input time_night_start
-                                then:
-                                  - action: timer.start
-                                    target:
-                                      entity_id: !input countdown_timer_entity
-                                    data:
-                                      duration: !input countdown_duration_day
-                                else:
-                                  - action: timer.start
-                                    target:
-                                      entity_id: !input countdown_timer_entity
-                                    data:
-                                      duration: !input countdown_duration_night
-                      - delay: !input debounce_lockout_period
-
-          - conditions:
-              - condition: trigger
-                id: Occupancy Cleared 15m
+                id: OccupancyCleared15m
             sequence:
               - action: scene.turn_on
                 target:
@@ -1067,7 +1104,7 @@ action:
 
           - conditions:
               - condition: trigger
-                id: Timer Completed
+                id: TimerCompleted
             sequence:
               - action: input_boolean.turn_off
                 target:
@@ -1088,7 +1125,7 @@ action:
 
           - conditions:
               - condition: trigger
-                id: End Restricted Hours
+                id: EndRestrictedHours
               - condition: template
                 value_template: "{{ restricted_hours_enabled }}"
             sequence:
@@ -1128,7 +1165,7 @@ action:
 
           - conditions:
               - condition: trigger
-                id: Time Day Start
+                id: TimeDayStart
               - condition: state
                 entity_id: !input active_status_entity
                 state: "on"
@@ -1143,7 +1180,7 @@ action:
 
           - conditions:
               - condition: trigger
-                id: Time Night Start
+                id: TimeNightStart
               - condition: state
                 entity_id: !input active_status_entity
                 state: "on"
