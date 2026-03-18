@@ -6,7 +6,7 @@ blueprint:
     # Brilliant Lights
 
 
-    *Version: 0.9.10*<p>
+    *Version: 0.9.11*<p>
 
 
     A stateful lighting scene controller which triggers
@@ -657,6 +657,19 @@ trigger_variables:
   occupancy_sensor_entity: !input occupancy_sensor_entity
   restricted_hours_schedule_entity: !input restricted_hours_schedule_entity
   light_switch_entity: !input light_switch_entity
+  debounce_lockout_period: !input debounce_lockout_period
+  time_day_start: !input time_day_start
+  time_night_start: !input time_night_start
+  # add a few seconds onto the day and night scene change times
+  # This ensures that if you set a time restriction end time
+  # to be the same as a scene change time, then the restriction
+  # will fire first and ensure the lights turn off as intended
+  time_day_start_debounce: >
+    {{ time_day_start |
+    as_timedelta + timedelta(seconds=debounce_lockout_period+1) }}
+  time_night_start_debounce: >
+    {{ time_night_start |
+    as_timedelta + timedelta(seconds=debounce_lockout_period+1) }}
 
 triggers:
   # Primary triggers - occupancy/clear/switch toggle
@@ -727,10 +740,10 @@ triggers:
 
   # Change scenes
   - trigger: time
-    at: !input time_day_start
+    at: "{{ time_day_start_debounce }}"
     id: TimeDayStart
   - trigger: time
-    at: !input time_night_start
+    at: "{{ time_night_start_debounce }}"
     id: TimeNightStart
 
 action:
