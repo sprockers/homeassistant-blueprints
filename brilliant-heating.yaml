@@ -1,0 +1,203 @@
+---
+blueprint:
+  name: Brilliant Heating
+  author: Chris Wood
+  description: >
+    # Brilliant Heating
+  domain: automation
+  input:
+    input_sensors:
+      name: Input Entities (Required)
+      description: >
+        The following entities are the primary input triggers for your
+        automation.<br>
+      icon: mdi:home-import-outline
+      collapsed: true
+      input:
+        occupancy_sensor_entity:
+          name: Occupancy Sensor (Required)
+          description: >
+            The binary sensor detecting occupancy or motion.<br>
+            _Best practice: If you have more than one occupancy sensor, create
+            a Binary Sensor Group Helper which contains all of your occupancy
+            sensors_
+          selector:
+            entity:
+              domain:
+                - binary_sensor
+              device_class:
+                - occupancy
+                - motion
+              multiple: false
+              reorder: false
+        climate_entity:
+          name: Climate Sensor (Required)
+          description: >
+            The `climate` sensor entity which controls the heating in the room.
+            This would typically be the climate sensor for your TRV
+          selector:
+            entity:
+              domain:
+                - climate
+              multiple: false
+              reorder: false
+        occupied_schedule_entity:
+          name: Occupied Schedule (Required)
+          description: >
+            The `schedule` entity defining times and temperatures to use when
+            the room is occupied
+          selector:
+            entity:
+              domain:
+                - schedule
+              multiple: false
+              reorder: false
+        default_occupied_temperature:
+          name: Default Occupied Schedule Temperature (Required)
+          description: >
+            The temperature to use by default with the Occupied Schedule.
+            You can override this using e.g. `temperature: 20.5` in the `data`
+            section of each schedule slot
+        occupied_schedule_start_delay_duration:
+          name: Occupied Schedule Start Delay (Required)
+          description: >
+            The length of time occupancy is required for before the Occupied
+            Schedule is used
+          default: '00:04:00'
+          selector:
+            duration:
+              enable_day: false
+        occupied_schedule_end_delay_duration:
+          name: Occupied Schedule End Delay (Required)
+          description: >
+            The length of time following occupancy clearing before heating
+            reverts to the eco schedule
+          default: '00:15:00'
+          selector:
+            duration:
+              enable_day: false
+    optional_scenes:
+      name: Trigger Scenes (Optional)
+      description: >
+        The automation has a number of trigger points where you might want
+        to take actions. We allow this through the use of scenes.<br>
+        For instance, imagine your occupancy sensor has a controllable LED.
+        When the automation actives, you could turn on the LED, and when it
+        becomes inactive, you could turn it off.<br>
+        This optional section provides you the ability to run scenes at each
+        of the useful state changes in the automation.<br>
+        Provide a scene for each of the trigger points you want to control,
+        and just leave the others blank.
+      icon: mdi:palette
+      collapsed: true
+      input:
+        occupied_schedule_applied_scene:
+          name: Occupied Schedule Applied (optional)
+          description: >
+            Triggers when Occupied Schedule is applied, following the
+            start delay
+          default:
+          selector:
+            entity:
+              domain: scene
+              multiple: false
+              reorder: false
+        eco_schedule_applied_scene:
+          name: Eco Schedule Applied (optional)
+          description: >
+            Triggers when Eco Schedule is applied, following the
+            end delay
+          default:
+          selector:
+            entity:
+              domain: scene
+              multiple: false
+              reorder: false
+
+  source_url: >
+    https://raw.githubusercontent.com/sprockers/homeassistant-blueprints/refs/heads/main/brilliant-heating.yaml
+mode: single
+
+variables:
+  occupied_schedule_entity: !input occupied_schedule_entity
+  default_occupied_temperature: !input default_occupied_temperature
+  occupied_schedule_applied_scene: !input occupied_schedule_applied_scene
+
+trigger_variables:
+  occupancy_sensor_entity: !input occupancy_sensor_entity
+
+triggers:
+  # Primary triggers - occupancy/clear/switch toggle
+  - trigger: state
+    entity_id: !input occupancy_sensor_entity
+    to: 'on'
+    for: !input occupied_schedule_start_delay_duration
+    id: OccupiedScheduleOn
+  - trigger: state
+    entity_id: !input occupancy_sensor_entity
+    to: 'off'
+    for: !input heating_end_delay
+    id: OccupiedScheduleOff
+  - trigger: state
+    entity_id: !input occupied_schedule_entity
+    to: 'off'
+    id: OccupiedScheduleOff
+  - trigger: state
+    entity_id: !input occupied_schedule_entity
+    attribute: temperature
+    id: OccupiedScheduleOn
+
+
+action:
+  - choose:
+
+      - conditions:
+          - condition: trigger
+            id: OccupiedScheduleOn
+        sequence:
+          - if:
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: !input climate_entity
+                    state: 'off'
+              - condition: state
+                entity_id: !input occupied_schedule_entity
+                state: "on"
+            then:
+              - action: climate.set_temperature
+                entity_id: !input climate_entity
+                hvac_mode: "heat"
+                temperature: >
+                  {{ state_attr(occupied_schedule_entity, 'temperature')
+                  if state_attr(occupied_schedule_entity, 'temperature')
+                  is not none else default_occupied_temperature }}
+              - if:
+                  - condition: template
+                    value_template: >
+                      {{ occupied_schedule_applied_scene is not none }}
+                then:
+                  - action: scene.turn_on
+                    target:
+                      entity_id: !input occupied_schedule_applied_scene
+
+      - conditions:
+          - condition: trigger
+            id: OccupiedScheduleOff
+        sequence:
+          - if:
+              - condition: state
+                entity_id: !input climate_entity
+                state: 'heat'
+            then:
+              - action: climate.set_hvac_mode
+                entity_id: !input climate_entity
+                hvac_mode: 'auto'
+              - if:
+                  - condition: template
+                    value_template: >
+                      {{ eco_schedule_applied_scene is not none }}
+                then:
+                  - action: scene.turn_on
+                    target:
+                      entity_id: !input eco_schedule_applied_scene
