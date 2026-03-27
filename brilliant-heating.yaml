@@ -76,6 +76,26 @@ blueprint:
           selector:
             duration:
               enable_day: false
+    state_helpers:
+      name: State Helpers (Required)
+      description: >
+        The following entities are used by the automation to hold state.<br>
+        You need to define these entities yourself, as `input_boolean` (Toggle)
+        helpers.
+      icon: mdi:state-machine
+      collapsed: true
+      input:
+        occupied_mode_status_entity:
+          name: Occupied Mode Status Helper (Required)
+          description: >
+            e.g. `input_boolean.<room_name>
+            brilliant_heating_occupied_mode_status`
+          selector:
+            entity:
+              domain:
+                - input_boolean
+              multiple: false
+              reorder: false
     optional_scenes:
       name: Trigger Scenes (Optional)
       description: >
@@ -172,6 +192,9 @@ action:
                   {{ state_attr(occupied_schedule_entity, 'temperature')
                   if state_attr(occupied_schedule_entity, 'temperature')
                   is not none else default_occupied_temperature }}
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: !input occupied_mode_status_entity
               - if:
                   - condition: template
                     value_template: >
@@ -193,6 +216,9 @@ action:
               - action: climate.set_hvac_mode
                 entity_id: !input climate_entity
                 hvac_mode: 'auto'
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: !input occupied_mode_status_entity
               - if:
                   - condition: template
                     value_template: >
