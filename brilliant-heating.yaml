@@ -154,6 +154,50 @@ blueprint:
           selector:
             duration:
               enable_day: false
+    off_mode_settings:
+      name: Off Mode Settings (Required)
+      description: >
+        How do we turn off your climate entity?<br>
+        If your climate entity has an `Off` Mode, then you should choose
+        this.<br>
+        If this doesn't exist, we'll use a temperature of your choosing.
+      icon: mdi:stop-circle-outline
+      input:
+        off_mode_type:
+          name: Off Mode Type (Required)
+          description: >
+            Select `Off` Mode, if your climate entity supports it
+          default: off_mode
+          selector:
+            select:
+              options:
+                - label: Climate Entity Off Mode
+                  value: off_mode
+                - label: Set Climate Entity Temperature
+                  value: temperature
+        off_mode_temperature:
+          name: Off Mode Temperature
+          description: >
+            Off temp
+          selector:
+            choose:
+              choices:
+                Celcius:
+                  selector:
+                    number:
+                      min: 5
+                      max: 30
+                      unit_of_measurement: °C
+                      step: 0.5
+                      mode: slider
+                Fahrenheit:
+                  selector:
+                    number:
+                      min: 40
+                      max: 85
+                      unit_of_measurement: °F
+                      step: 1
+                      mode: slider
     state_helpers:
       name: State Helpers (Required)
       description: >
