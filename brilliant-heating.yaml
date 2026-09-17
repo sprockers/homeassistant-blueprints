@@ -43,6 +43,22 @@ blueprint:
                 - climate
               multiple: false
               reorder: false
+        zone_on_off_entity:
+          name: Zone On/Off Entity (Optional)
+          description: >
+            Does this heating zone have a switch or toggle entity which indicates
+            whether the heating is on or off?<br>
+            If so, select it here, annd the heating automation will only run
+            when the switch is set to `On`.<br>
+            If you don't have one of these, you might find it useful to create one
+            as a toggle helper, as it gives you fine-grained control of your heating.
+          selector:
+            entity:
+              domain:
+                - switch
+                - toggle
+              multiple: false
+              reorder: false
     eco_mode_settings:
       name: Eco Mode Settings (Required)
       description: >
@@ -62,21 +78,51 @@ blueprint:
             can use one of them as your Eco mode for the room.<br>
             If your entity doesn't support these modes, then you must provide
             a `schedule` entity to use instead.
-          default: 'climate_off_mode'
+          default: 'default_temp'
           selector:
             select:
               options:
+                - label: >
+                    Use Default Eco Temperature
+                  value: default_temp
+                - label: >
+                    Schedule Entity
+                  value: schedule_entity
                 - label: >
                     Climate Entity Off Mode
                   value: climate_off_mode
                 - label: >
                     Climate Entity Auto Mode
                   value: climate_auto_mode
-                - label: >
-                    Eco Schedule Entity
-                  value: schedule_entity
+        default_eco_temperature:
+          name: Default Eco Temperature (Required)
+          description: >
+            The temperature to use by default in Eco mode.
+            If you are using a schedule entity then
+            you can override this using e.g. `temperature: 20.5` in the `data`
+            section of each schedule slot
+          default: 16
+          selector:
+            choose:
+              choices:
+                Celcius:
+                  selector:
+                    number:
+                      min: 5
+                      max: 30
+                      unit_of_measurement: °C
+                      step: 0.5
+                      mode: slider
+                Fahrenheit:
+                  selector:
+                    number:
+                      min: 40
+                      max: 85
+                      unit_of_measurement: °F
+                      step: 1
+                      mode: slider
         eco_schedule_entity:
-          name: Eco Schedule Entity (Required if using Eco Schedule Entity mode)
+          name: Schedule Entity (Required if using Schedule Entity mode)
           description: >
             The `schedule` entity defining times and temperatures to use when
             the room is in Eco Mode
@@ -86,20 +132,15 @@ blueprint:
                 - schedule
               multiple: false
               reorder: false
-        default_eco_temperature:
-          name: Default Eco Schedule Temperature (Required)
-          description: >
-            The temperature to use by default with the Eco Schedule.
-            You can override this using e.g. `temperature: 20.5` in the `data`
-            section of each schedule slot
-          default: 16
-          selector:
-            number:
-              min: 5
-              max: 30
-              unit_of_measurement: C
-              step: 0.5
-              mode: slider
+        eco_schedule_attribute:
+            name: Attribute name (Required if using Schedule Entity mode)
+            description: >
+              The name of the attribute within schedule timeslots which you'll
+              use to define the temperature<br>
+              e.g. to use `temp: 21` in timeslots, you should enter `temp` here
+            default: temperature
+            selector:
+              text:
     occupied_mode_settings:
       name: Occupied Mode Settings (Required)
       description: >
@@ -111,8 +152,52 @@ blueprint:
         off helps cope with people leaving the room for short periods.
       icon: mdi:account-circle-outline
       input:
+        occupied_mode_type:
+          name: Occupied Mode Type (Required)
+          description:  >
+            foo
+          default: 'default_temp'
+          selector:
+            select:
+              options:
+                - label: >
+                    Use Default Occupied Temperature
+                  value: default_temp
+                - label: >
+                    Schedule Entity
+                  value: schedule_entity
+                - label: >
+                    Climate Entity Auto Mode
+                  value: climate_auto_mode
+        default_occupied_temperature:
+          name: Default Occupied Temperature (Required)
+          description: >
+            The temperature to use by default in Occupied mode.
+            If you are using a schedule entity then
+            you can override this using e.g. `temperature: 20.5` in the `data`
+            section of each schedule slot
+          default: 19
+          selector:
+            choose:
+              choices:
+                Celcius:
+                  selector:
+                    number:
+                      min: 5
+                      max: 30
+                      unit_of_measurement: °C
+                      step: 0.5
+                      mode: slider
+                Fahrenheit:
+                  selector:
+                    number:
+                      min: 40
+                      max: 85
+                      unit_of_measurement: °F
+                      step: 1
+                      mode: slider
         occupied_schedule_entity:
-          name: Occupied Schedule Entity (Required)
+          name: Occupied Schedule Entity (Required if using Schedule Entity mode)
           description: >
             The `schedule` entity defining times and temperatures to use when
             the room is occupied
@@ -122,25 +207,20 @@ blueprint:
                 - schedule
               multiple: false
               reorder: false
-        default_occupied_temperature:
-          name: Default Occupied Schedule Temperature (Required)
-          description: >
-            The temperature to use by default with the Occupied Schedule.
-            You can override this using e.g. `temperature: 20.5` in the `data`
-            section of each schedule slot
-          default: 19
-          selector:
-            number:
-              min: 5
-              max: 30
-              unit_of_measurement: C
-              step: 0.5
-              mode: slider
+        occupied_schedule_attribute:
+            name: Attribute name (Required if using Schedule Entity mode)
+            description: >
+              The name of the attribute within schedule timeslots which you'll
+              use to define the temperature<br>
+              e.g. to use `temp: 21` in timeslots, you should enter `temp` here
+            default: temperature
+            selector:
+              text:
         occupied_schedule_start_delay_duration:
           name: Occupied Schedule Start Delay (Required)
           description: >
-            The length of time occupancy is required for before the Occupied
-            Schedule is used
+            The length of time room occupancy is required for before the 
+            Occupied Schedule is used
           default: '00:04:00'
           selector:
             duration:
@@ -148,7 +228,7 @@ blueprint:
         occupied_schedule_end_delay_duration:
           name: Occupied Schedule End Delay (Required)
           description: >
-            The length of time following occupancy clearing before heating
+            The length of time following room occupancy clearing before heating
             reverts to the eco schedule
           default: '00:15:00'
           selector:
@@ -176,9 +256,10 @@ blueprint:
                 - label: Set Climate Entity Temperature
                   value: temperature
         off_mode_temperature:
-          name: Off Mode Temperature
+          name: Off Mode Temperature (Required if you are not using Off mode on your climate entity)
           description: >
             Off temp
+          default: 5
           selector:
             choose:
               choices:
@@ -198,6 +279,87 @@ blueprint:
                       unit_of_measurement: °F
                       step: 1
                       mode: slider
+    window_mode_settings:
+      name: Open Window Mode Settings (Optional)
+      description: >
+        How does the heating work if a window is opened in the room?<br>
+        If the room has windows or a door to the outside with sensors,
+        then you can use these to turn the heating off when they are opened.
+      icon: mdi:window-open
+      collapsed: true
+      input:
+        window_mode_enabled:
+          name: Enable Open Window Mode?
+          description: >
+            foo
+          default: false
+          selector:
+            boolean:
+        window_contact_entity:
+          name: Window Contact Entity (Required if enabled)
+          description: >
+            The `contact` entity of the window or door. Note that if you have more than one entity
+            then you should create a group helper entity and then use this.
+          selector:
+            entity:
+              domain:
+                - contact
+              multiple: false
+              reorder: false          
+
+    room_boost:
+      name: Room Boost Mode Settings (Optional)
+      description: >
+        Room boost is an easy way for you to quickly increase the temperature in the room
+      icon: mdi:thermometer-plus
+      collapsed: true
+      input:
+        boost_enabled:
+          name: Enable Room Boost Mode?
+          description: >
+            If you wish to use the room boost you need to enable it here and provide
+            the required information below
+          default: false
+          selector:
+            boolean:
+        boost_duration:
+          name: Boost Duration (Required if enabled)
+          description: >
+            How many minutes should the boost function run for?
+          default: '30'
+          selector:
+            select:
+              options:
+                - label: 30m
+                  value: '30'
+                - label: 60m
+                  value: '60'
+                - label: 90m
+                  value: '90'
+                - label: 120m
+                  value: '120'
+
+        boost_temperature_uplift:
+          name: Temperature Uplift (Required if enabled)
+          description: >
+            By how many degrees should the temperature be uplifted whilst boost is in effect?
+          default: 2
+          selector:
+            number:
+              min: 1
+              max: 8
+              step: 0.5
+              mode: slider
+        boost_timer_entity:
+          name: Timer Helper Entity (Required if boost enabled)
+          description: >
+            The timer entity is used to countdown the remaining time the boost is active
+          selector:
+            entity:
+              filter:
+                - device:
+                    integration: timer
+
     state_helpers:
       name: State Helpers (Required)
       description: >
@@ -258,114 +420,297 @@ blueprint:
 mode: single
 
 variables:
+  climate_entity: !input climate_entity
+  occupancy_sensor_entity: !input occupancy_sensor_entity
+  eco_schedule_entity: !input eco_schedule_entity
   occupied_schedule_entity: !input occupied_schedule_entity
   default_occupied_temperature: !input default_occupied_temperature
   occupied_schedule_applied_scene: !input occupied_schedule_applied_scene
   eco_mode_type: !input eco_mode_type
   default_eco_temperature: !input default_eco_temperature
+  eco_schedule_attribute: !input eco_schedule_attribute
+  occupied_schedule_attribute: !input occupied_schedule_attribute
+  off_mode_type: !input off_mode_type
+  off_mode_temperature: !input off_mode_temperature
+  heating_mode_status_entity: !input heating_mode_status_entity
+  zone_on_off_entity: !input zone_on_off_entity
+  window_contact_entity: !input window_contact_entity
+  window_mode_enabled: !input window_mode_enabled
+  set_point: !input default_eco_temperature
+  set_climate_heat: false
+  set_climate_off: false
+  set_climate_auto: false
 
 trigger_variables:
   occupancy_sensor_entity: !input occupancy_sensor_entity
+  eco_schedule_entity: !input eco_schedule_entity
+  occupied_schedule_entity: !input occupied_schedule_entity
+window_contact_entity: !input window_contact_entity
+
 
 triggers:
-
   - trigger: state
     entity_id: !input occupancy_sensor_entity
+    from: 'off'
     to: 'on'
     for: !input occupied_schedule_start_delay_duration
-    id: TurnOccupiedScheduleOn
-  - trigger: state
-    entity_id: !input occupied_schedule_entity
-    attribute: temperature
-    id: TurnOccupiedScheduleOn
+    id: OccupancyOn
   - trigger: state
     entity_id: !input occupancy_sensor_entity
+    from: 'on'
     to: 'off'
     for: !input occupied_schedule_end_delay_duration
-    id: TurnOccupiedScheduleOff
-  - trigger: state
-    entity_id: !input occupied_schedule_entity
-    to: 'off'
-    id: TurnOccupiedScheduleOff
+    id: OccupancyOff
 
+  - trigger: template
+    value_template: >
+      {{ (trigger.to_state.attributes.eco_schedule_entity).last_changed 
+        != (trigger.from_state.attributes.eco_schedule_entity).last_changed
+        if eco_schedule_entity is not none else false }}
+    id: EcoScheduleEvent
+  - trigger: template
+    value_template: >
+      {{ (trigger.to_state.attributes.occupied_schedule_entity).last_changed 
+        != (trigger.from_state.attributes.occupied_schedule_entity).last_changed
+        if occupied_schedule_entity is not none else false }}
+    id: OccupiedScheduleEvent
 
-action:
-  - choose:
+  - trigger: template
+    value_template: >
+      {{ (trigger.to_state.attributes.window_contact_entity).last_changed 
+        != (trigger.from_state.attributes.window_contact_entity).last_changed
+        if window_contact_entity is not none else false }}
+    id: WindowContactEvent
 
+actions:
+  - if:
+      # Is heating in this zone enabled?
+      - condition: or
+        conditions:
+          - condition: template
+            value_template: >
+              {{ zone_on_off_entity is none }}
+          - condition: template
+            value_template: >
+              {{ is_state(zone_on_off_entity, 'on') if zone_on_off_entity
+                is not none else false}}
+    then:
+      # Heating in this zone is enabled
+
+      # Work out set point values for eco and occupied modes
+      - variables:
+          eco_set_point: >
+            {{ state_attr(eco_schedule_entity, eco_schedule_attribute) 
+                if state_attr(eco_schedule_entity, eco_schedule_attribute) is not none
+                else default_eco_temperature }}
+          occupied_set_point: >
+            {{ state_attr(occupied_schedule_entity, occupied_schedule_attribute) 
+                if state_attr(occupied_schedule_entity, occupied_schedule_attribute) is not none
+                else default_occupied_temperature }}
+
+      # Process OccupancyOn trigger
       - conditions:
           - condition: trigger
-            id: TurnOccupiedScheduleOn
-          - condition: state
-            entity_id: !input occupancy_sensor_entity
-            state: 'on'
-          - condition: state
-            entity_id: !input occupied_schedule_entity
-            state: 'on'
+            id: OccupancyOn
         sequence:
-          - action: climate.set_temperature
-            entity_id: !input climate_entity
-            hvac_mode: "heat"
-            temperature: >
-              {{ state_attr(occupied_schedule_entity, 'temperature')
-              if state_attr(occupied_schedule_entity, 'temperature')
-              is not none else default_occupied_temperature }}
-          - action: input_text.set_value
-            target:
-              entity_id: !input heating_mode_status_entity
+          - action: text.set_value
+            entity_id: >
+              {{ heating_mode_status_entity }}
             data:
               value: 'Occupied'
-          - if:
-              - condition: template
-                value_template: >
-                  {{ occupied_schedule_applied_scene is not none }}
-            then:
-              - action: scene.turn_on
-                target:
-                  entity_id: !input occupied_schedule_applied_scene
+          - choose:
+              - conditions:
+                  - condition: or
+                    conditions:
+                      - condition: template
+                        value_template: >
+                          {{ occupied_mode_type == 'schedule_entity' }}
+                      - condition: template
+                        value_template: >
+                          {{ occupied_mode_type == 'default_temp' }}
+                sequence:
+                  - variables:
+                      set_point: >
+                        {{ occupied_set_point }}
+                      set_climate_heat: true
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ occupied_mode_type == 'climate_auto_mode' }}
+                sequence:
+                  - variables:
+                      set_climate_auto: true
 
+      # Process OccupancyOff trigger
       - conditions:
           - condition: trigger
-            id: TurnOccupiedScheduleOff
+            id: OccupancyOff
         sequence:
+          - action: text.set_value
+            entity_id: >
+              {{ heating_mode_status_entity }}
+            data:
+              value: 'Eco'
           - choose:
+              - conditions:
+                  - condition: or
+                    conditions:
+                      - condition: template
+                        value_template: >
+                          {{ eco_mode_type == 'schedule_entity' }}
+                      - condition: template
+                        value_template: >
+                          {{ eco_mode_type == 'default_temp' }}
+                sequence:
+                  - variables:
+                      set_point: >
+                        {{ eco_set_point }}
+                      set_climate_heat: true
               - conditions:
                   - condition: template
                     value_template: >
                       {{ eco_mode_type == 'climate_off_mode' }}
                 sequence:
-                  - action: climate.set_hvac_mode
-                    entity_id: !input climate_entity
-                    hvac_mode: 'off'
+                  - variables:
+                      set_climate_off: true
               - conditions:
                   - condition: template
                     value_template: >
                       {{ eco_mode_type == 'climate_auto_mode' }}
                 sequence:
-                  - action: climate.set_hvac_mode
-                    entity_id: !input climate_entity
-                    hvac_mode: 'auto'
+                  - variables:
+                      set_climate_auto: true                  
+
+      # Process EcoScheduleEvent trigger
+      - conditions:
+          - condition: trigger
+            id: EcoScheduleEvent
+          - condition: template
+            value_template: >
+              {{ eco_mode_type == 'schedule_entity' }}
+          - condition: state
+            entity_id: >
+              {{ heating_mode_status_entity }}
+            state: 'Eco'
+        sequence:
+          - variables:
+              set_point: >
+                {{ eco_set_point }}
+              eco_schedule_state: >
+                {{ state(eco_schedule_entity) }}
+              set_climate_heat: true
+
+      # Process OccupiedScheduleEvent trigger
+      - conditions:
+          - condition: trigger
+            id: OccupiedScheduleEvent
+          - condition: template
+            value_template: >
+              {{ occupied_mode_type == 'schedule_entity' }}
+          - condition: state
+            entity_id: >
+              {{ heating_mode_status_entity }}
+            state: 'Occupied'
+        sequence:
+          - variables:
+              set_point: >
+                {{ occupied_set_point }}
+              occupied_schedule_state: >
+                {{ state(occupied_schedule_entity) }}
+              set_climate_heat: true
+
+      # Process WindowContactEvent trigger
+      - conditions:
+          - condition: trigger
+            id: WindowContactEvent
+          - condition: template
+            value_template: >
+              {{ window_mode_enabled == true }}
+        sequence:
+          - choose:
               - conditions:
-                  - condition: template
-                    value_template: >
-                      {{ eco_mode_type == 'schedule_entity' }}
+                  - condition: state
+                    entity_id: >
+                      {{ window_contact_entity }}
+                    state: 'on'
                 sequence:
-                  - action: climate.set_temperature
-                    entity_id: !input climate_entity
-                    hvac_mode: "heat"
-                    temperature: >
-                      {{ state_attr(eco_schedule_entity, 'temperature')
-                      if state_attr(eco_schedule_entity, 'temperature')
-                      is not none else default_eco_temperature }}
-          - action: input_text.set_value
-            target:
-              entity_id: !input heating_mode_status_entity
+                  - variables:
+                      set_climate_off: true
+              - conditions:
+                  - condition: state
+                    entity_id: >
+                      {{ window_contact_entity }}
+                    state: 'off'
+                  - condition: state
+                    entity_id: >
+                      {{ heating_mode_status_entity }}
+                    state: 'Eco'
+                sequence:
+                  - variables:
+                      set_point: >
+                        {{ eco_set_point }}
+                      eco_schedule_state: >
+                        {{ state(eco_schedule_entity) }}
+                      set_climate_heat: true
+              - conditions:
+                  - condition: state
+                    entity_id: >
+                      {{ window_contact_entity }}
+                    state: 'off'
+                  - condition: state
+                    entity_id: >
+                      {{ heating_mode_status_entity }}
+                    state: 'Occupied'
+                sequence:
+                  - variables:
+                      set_point: >
+                        {{ occupied_set_point }}
+                      eco_schedule_state: >
+                        {{ state(occupied_schedule_entity) }}
+                      set_climate_heat: true
+
+      # Modify actions if climate device doesn't have off mode
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ off_mode_type == 'temperature' }}
+        sequence:
+          - variables:
+              set_point: >
+                {{ off_mode_temperature }}
+              set_climate_off: false
+              set_climate_heat: true
+
+      # ACTION: climate.set_temperature
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ set_climate_heat == true }}
+        sequence:
+          - action: climate.set_temperature
+            target: '{{ climate_entity }}'
             data:
-              value: 'Eco'
-          - if:
-              - condition: template
-                value_template: >
-                  {{ eco_schedule_applied_scene is not none }}
-            then:
-              - action: scene.turn_on
-                target:
-                  entity_id: !input eco_schedule_applied_scene
+              temperature: '{{ set_point }}'
+              hvac_mode: heat
+
+      # ACTION: climate.set_hvac_mode off
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ set_climate_off == true }}
+        sequence:
+          - action: climate.set_hvac_mode
+            target: '{{ climate_entity }}'
+            data:
+              hvac_mode: off
+
+      # ACTION: climate.set_hvac_mode auto
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ set_climate_auto == true }}
+        sequence:
+          - action: climate.set_hvac_mode
+            target: '{{ climate_entity }}'
+            data:
+              hvac_mode: auto
